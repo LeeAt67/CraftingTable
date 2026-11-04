@@ -1,9 +1,12 @@
 # Leeat Agent 工作区设计规范
 
 日期：2026-11-04
-状态：待评审
+状态：已取代
 范围：单 Agent 会话工作区
 架构：前端 MVC，Vercel AI SDK 负责前端流消费，LangChain.js 负责服务端推理
+术语基线：[Leeat 术语表](../../glossary.md)
+
+> **替代说明**：本文已由 [Leeat Agent 设计](./2026-11-05-leeat-agent-design.md) 取代。本文中的 Fastify、Node.js SQLite 和 LangChain.js 方案只保留为历史设计记录。
 
 ## 1. 产品定义
 
