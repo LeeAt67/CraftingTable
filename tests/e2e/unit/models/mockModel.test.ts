@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createMockModel } from "./mockModel";
+import { createMockModel } from "@/models/mockModel";
 
 describe("MockModel", () => {
   let model: ReturnType<typeof createMockModel>;

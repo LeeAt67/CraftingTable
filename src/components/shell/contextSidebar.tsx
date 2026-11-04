@@ -1,16 +1,17 @@
-const filters = [
-  { label: "全部", count: 8 },
-  { label: "已安排", count: 5 },
-  { label: "已完成", count: 3 },
-];
-
-const categories = [
-  { label: "工作", color: "#5468FF" },
-  { label: "学习", color: "#00B42A" },
-  { label: "生活", color: "#F59E0B" },
-];
+import { useTodayStore } from "@/controllers/stores/todayStore";
 
 export function ContextSidebar() {
+  const { items, categories } = useTodayStore();
+  const planned = items.filter((item) => item.startAt).length;
+  const done = items.filter((item) => item.status === "done").length;
+  const progress =
+    items.length === 0 ? 0 : Math.round((done / items.length) * 100);
+  const filters = [
+    { label: "全部", count: items.length },
+    { label: "已安排", count: planned },
+    { label: "已完成", count: done },
+  ];
+
   return (
     <aside
       aria-label="今日上下文"
@@ -19,7 +20,9 @@ export function ContextSidebar() {
       <div className="mb-6">
         <p className="truncate text-sm font-semibold text-textPrimary">今日</p>
         <p className="mt-1 hidden text-xs text-textSecondary min-[768px]:block">
-          2026年11月4日
+          {new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium" }).format(
+            new Date(),
+          )}
         </p>
       </div>
       <nav aria-label="今日筛选" className="space-y-1">
@@ -37,20 +40,32 @@ export function ContextSidebar() {
           </button>
         ))}
       </nav>
+      <div className="mt-8 hidden min-[768px]:block">
+        <div className="flex items-center justify-between text-[11px] text-textSecondary">
+          <span>今日完成度</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border">
+          <div
+            className="h-full rounded-full bg-brand"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
       <p className="mb-2 mt-7 hidden text-[11px] font-medium uppercase tracking-wider text-textSecondary min-[768px]:block">
         分类
       </p>
       <div className="space-y-1">
         {categories.map((category) => (
           <button
-            key={category.label}
+            key={category.id}
             className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs text-textSecondary hover:bg-surface min-[768px]:text-sm"
           >
             <span
               className="size-2 shrink-0 rounded-full"
               style={{ backgroundColor: category.color }}
             />
-            <span className="truncate">{category.label}</span>
+            <span className="truncate">{category.name}</span>
           </button>
         ))}
       </div>

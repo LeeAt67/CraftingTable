@@ -3,4 +3,7 @@ import { apiModel } from "./apiModel";
 import { mockModel } from "./mockModel";
 
 export const todayModel: TodayModel =
-  import.meta.env.VITE_DATA_SOURCE === "api" ? apiModel : mockModel;
+  import.meta.env.VITE_DATA_SOURCE === "mock" ||
+  import.meta.env.MODE === "test"
+    ? mockModel
+    : apiModel;

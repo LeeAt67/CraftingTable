@@ -472,6 +472,11 @@ Electron 打包、自动更新、系统托盘、原生菜单和多窗口不属�
 
 ## 15. 测试
 
+- 所有测试统一放在 `tests/e2e`，不散落在 `src` 或 `api`。
+- 按业务模块拆目录：`modules/home`、`modules/settings`、`modules/today`、`modules/theme`、`modules/layout`。
+- 单元测试放在 `tests/e2e/unit`，使用 `*.test.ts` / `*.test.tsx`。
+- 浏览器测试放在 `tests/e2e/modules`，使用 `*.e2e.ts`。
+- Playwright 只匹配 `*.e2e.ts`，Vitest 只匹配 `*.test.ts` / `*.test.tsx`。
 - TypeScript 严格模式无错误。
 - Vitest 覆盖 Model 接口、Store 同步动作和 Today Effect 异步动作。
 - Store 测试不启动 React，不访问网络。

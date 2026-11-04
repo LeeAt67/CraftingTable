@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { routes } from "./index";
+import { routes } from "@/router";
 
 describe("AppRouter", () => {
   it("shows home navigation and the context sidebar", () => {

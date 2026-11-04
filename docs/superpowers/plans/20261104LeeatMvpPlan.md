@@ -96,13 +96,19 @@ api/
     app.ts
     routes.ts
     server.ts
-  test/
-    app.test.ts
-    itemModel.test.ts
-
 tests/
   e2e/
-    leeat.spec.ts
+    modules/
+      home/
+      layout/
+      settings/
+      theme/
+      today/
+    unit/
+      app/
+      models/
+      theme/
+    support/
 ```
 
 - `models` 只处理契约和 I/O。
@@ -112,6 +118,7 @@ tests/
 - `api/src/models` 只处理 SQL。
 - `api/src/controllers` 只校验、编排和返回结果。
 - `api/src/views` 只定义 JSON envelope。
+- 所有测试统一位于 `tests/e2e`；浏览器测试使用 `.e2e.ts`，Vitest 测试使用 `.test.ts` 或 `.test.tsx`。
 
 ### Task 1: Scaffold React, Tailwind and Test Harness
 
