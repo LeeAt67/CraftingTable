@@ -1,0 +1,1668 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Leeat Color System</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2317191D'/%3E%3Cpath d='M22 16h8v24h14v8H22z' fill='white'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Sans:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f2f5f8;
+        --paper: #ffffff;
+        --ink: #1d2129;
+        --muted: #86909c;
+        --line: #d8dee9;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        min-width: 320px;
+        background: var(--page);
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      button:focus-visible {
+        outline: 2px solid #5468ff;
+        outline-offset: 3px;
+      }
+
+      .page-shell {
+        width: min(1480px, calc(100% - 48px));
+        margin: 0 auto;
+        padding: 26px 0 48px;
+      }
+
+      .masthead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid rgba(23, 25, 29, 0.14);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--ink);
+        color: #fff;
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 17px;
+        font-weight: 700;
+      }
+
+      .brand-name {
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .brand-subtitle {
+        margin-top: 4px;
+        color: var(--muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px;
+        line-height: 1;
+      }
+
+      .view-switcher {
+        display: inline-flex;
+        gap: 3px;
+        padding: 3px;
+        border: 1px solid rgba(23, 25, 29, 0.16);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.56);
+      }
+
+      .view-button {
+        min-height: 30px;
+        padding: 0 13px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .view-button:hover {
+        color: var(--ink);
+      }
+
+      .view-button[aria-pressed="true"] {
+        background: var(--ink);
+        color: #fff;
+      }
+
+      .intro {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
+        gap: 48px;
+        align-items: end;
+        padding: 56px 0 38px;
+      }
+
+      .eyebrow {
+        margin: 0 0 13px;
+        color: #5468ff;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 720px;
+        margin: 0;
+        font-family: "Instrument Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+        font-size: clamp(38px, 5vw, 72px);
+        font-weight: 600;
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+
+      .intro-copy {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .showcase {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .showcase[data-view="light"] {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .showcase[data-view="light"] .theme-card.dark {
+        display: none;
+      }
+
+      .showcase[data-view="dark"] {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .showcase[data-view="dark"] .theme-card.light {
+        display: none;
+      }
+
+      .theme-card {
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid rgba(23, 25, 29, 0.16);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--ink);
+      }
+
+      .theme-card.light {
+        --page: #f2f5f8;
+        --panel: #ffffff;
+        --panel-2: #f7f8fa;
+        --ink: #1d2129;
+        --body: #4e5969;
+        --muted: #86909c;
+        --line: #d8dee9;
+        --accent: #5468ff;
+        --accent-hover: #7080ff;
+        --accent-active: #4152d8;
+        --accent-soft: #eef0ff;
+        --success: #00b42a;
+        --shadow: 0 12px 30px rgba(24, 28, 36, 0.06);
+      }
+
+      .theme-card.dark {
+        --page: #17191d;
+        --panel: #1e2126;
+        --panel-2: #25292f;
+        --ink: #f1f3f5;
+        --body: #c9cdd4;
+        --muted: #969ca6;
+        --line: #30353c;
+        --accent: #7b8aff;
+        --accent-hover: #98a4ff;
+        --accent-active: #6577ff;
+        --accent-soft: rgba(123, 138, 255, 0.14);
+        --success: #46d16c;
+        --shadow: 0 18px 36px rgba(0, 0, 0, 0.18);
+      }
+
+      .theme-card.dark .primary-button,
+      .palette-panel.dark .sample-button {
+        color: #17191d;
+      }
+
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 15px 17px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--ink);
+      }
+
+      .theme-label {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .theme-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 4px var(--accent-soft);
+      }
+
+      .theme-meta {
+        color: var(--muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px;
+      }
+
+      .preview-shell {
+        min-height: 430px;
+        background: var(--page);
+        color: var(--ink);
+      }
+
+      .preview-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 44px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .preview-brand-group {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .preview-logo {
+        display: grid;
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        place-items: center;
+        border-radius: 6px;
+        background: var(--accent);
+        color: #fff;
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .theme-card.dark .preview-logo {
+        color: #17191d;
+      }
+
+      .preview-brand {
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+
+      .preview-separator {
+        width: 1px;
+        height: 12px;
+        background: var(--line);
+      }
+
+      .preview-context {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 8px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .preview-workspace {
+        display: grid;
+        grid-template-columns: 42px 132px minmax(0, 1fr);
+        min-height: 392px;
+      }
+
+      .preview-rail {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 7px;
+        padding: 10px 0;
+        border-right: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .rail-button {
+        display: grid;
+        width: 29px;
+        height: 29px;
+        place-items: center;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+      }
+
+      .rail-button svg {
+        width: 14px;
+        height: 14px;
+        stroke-width: 1.8;
+      }
+
+      .rail-button.active {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .rail-spacer {
+        flex: 1;
+      }
+
+      .preview-sidebar {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 17px;
+        padding: 15px 10px;
+        border-right: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .context-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .context-title {
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .context-add {
+        display: grid;
+        width: 20px;
+        height: 20px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: var(--panel-2);
+        color: var(--muted);
+      }
+
+      .context-add svg {
+        width: 11px;
+        height: 11px;
+      }
+
+      .context-label {
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 8px;
+        text-transform: uppercase;
+      }
+
+      .context-list {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .context-item {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        min-height: 26px;
+        padding: 0 7px;
+        border-radius: 5px;
+        color: var(--body);
+        font-size: 9px;
+      }
+
+      .context-item svg {
+        flex: 0 0 auto;
+        width: 11px;
+        height: 11px;
+        stroke-width: 1.8;
+      }
+
+      .context-item.active {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 500;
+      }
+
+      .context-item span:not(.context-dot) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .context-count {
+        margin-left: auto;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 8px;
+      }
+
+      .context-dot {
+        flex: 0 0 auto;
+        width: 6px;
+        height: 6px;
+        border-radius: 2px;
+        background: var(--accent);
+      }
+
+      .context-dot.learning {
+        background: #e0a341;
+      }
+
+      .context-dot.life {
+        background: var(--success);
+      }
+
+      .focus-card {
+        margin-top: auto;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+
+      .focus-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 8px;
+      }
+
+      .focus-meta strong {
+        color: var(--ink);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 9px;
+        font-weight: 500;
+      }
+
+      .focus-track {
+        height: 3px;
+        margin-top: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--line);
+      }
+
+      .focus-value {
+        width: 38%;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+      }
+
+      .preview-main {
+        min-width: 0;
+        padding: 18px 18px 16px;
+      }
+
+      .main-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .date-label {
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 9px;
+      }
+
+      .main-title {
+        font-family: "Instrument Sans", "PingFang SC", sans-serif;
+        font-size: 23px;
+        font-weight: 600;
+        line-height: 1.1;
+        letter-spacing: 0;
+      }
+
+      .primary-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 30px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 6px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 9px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+
+      .primary-button svg {
+        width: 11px;
+        height: 11px;
+      }
+
+      .summary-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        margin-bottom: 15px;
+      }
+
+      .summary-item {
+        min-width: 0;
+        padding: 8px 9px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+      }
+
+      .summary-value {
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        line-height: 1;
+      }
+
+      .summary-label {
+        margin-top: 5px;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 8px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .content-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 9px;
+      }
+
+      .content-title {
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .content-link {
+        color: var(--muted);
+        font-size: 8px;
+      }
+
+      .day-spine {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding-left: 15px;
+      }
+
+      .day-spine::before {
+        position: absolute;
+        top: 5px;
+        bottom: 5px;
+        left: 4px;
+        width: 1px;
+        background: var(--line);
+        content: "";
+      }
+
+      .timeline-item {
+        position: relative;
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+      }
+
+      .timeline-time {
+        color: var(--muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 8px;
+      }
+
+      .timeline-dot {
+        position: absolute;
+        top: 50%;
+        left: -14px;
+        width: 7px;
+        height: 7px;
+        border: 2px solid var(--page);
+        border-radius: 50%;
+        background: var(--line);
+        transform: translateY(-50%);
+      }
+
+      .timeline-item.event .timeline-dot {
+        background: var(--accent);
+      }
+
+      .timeline-item.done .timeline-dot {
+        background: var(--success);
+      }
+
+      .timeline-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 42px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+      }
+
+      .timeline-copy {
+        min-width: 0;
+      }
+
+      .timeline-title {
+        overflow: hidden;
+        font-size: 9px;
+        font-weight: 500;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .timeline-subtitle {
+        margin-top: 3px;
+        overflow: hidden;
+        color: var(--body);
+        font-size: 8px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .check {
+        display: grid;
+        flex: 0 0 auto;
+        width: 14px;
+        height: 14px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        color: transparent;
+      }
+
+      .check svg {
+        width: 9px;
+        height: 9px;
+        stroke-width: 2.2;
+      }
+
+      .timeline-item.done .check {
+        border-color: var(--success);
+        background: var(--success);
+        color: #fff;
+      }
+
+      .timeline-item.done .timeline-title {
+        color: var(--muted);
+        text-decoration: line-through;
+      }
+
+      .quick-capture {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 34px;
+        margin-top: 13px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--muted);
+        font-size: 8px;
+      }
+
+      .quick-capture svg {
+        width: 11px;
+        height: 11px;
+      }
+
+      .palette-section {
+        padding-top: 28px;
+      }
+
+      .section-heading {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 14px;
+      }
+
+      .section-heading h2 {
+        margin: 0;
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 22px;
+        font-weight: 600;
+      }
+
+      .section-heading p {
+        margin: 0;
+        color: var(--muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px;
+      }
+
+      .palette-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .palette-panel {
+        overflow: hidden;
+        border: 1px solid rgba(23, 25, 29, 0.16);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      .palette-panel.light {
+        --panel: #ffffff;
+        --panel-2: #f7f8fa;
+        --ink: #1d2129;
+        --muted: #86909c;
+        --line: #d8dee9;
+      }
+
+      .palette-panel.dark {
+        --panel: #1e2126;
+        --panel-2: #25292f;
+        --ink: #f1f3f5;
+        --muted: #969ca6;
+        --line: #30353c;
+      }
+
+      .palette-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 13px 15px;
+        border-bottom: 1px solid var(--line);
+        color: var(--ink);
+      }
+
+      .palette-title strong {
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .palette-title span {
+        color: var(--muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 9px;
+      }
+
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 1px;
+        background: var(--line);
+      }
+
+      .swatch {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        background: var(--panel);
+        color: var(--ink);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .swatch-color {
+        height: 58px;
+        background: var(--swatch);
+      }
+
+      .swatch-info {
+        min-width: 0;
+        padding: 9px 8px 11px;
+        background: var(--panel);
+      }
+
+      .swatch-name,
+      .swatch-value {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .swatch-name {
+        color: var(--muted);
+        font-size: 8px;
+      }
+
+      .swatch-value {
+        margin-top: 3px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 8px;
+        font-weight: 500;
+      }
+
+      .usage-row {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr 0.8fr;
+        gap: 8px;
+        padding: 14px 15px 16px;
+        border-top: 1px solid var(--line);
+        background: var(--panel-2);
+        color: var(--ink);
+      }
+
+      .usage-item {
+        min-width: 0;
+      }
+
+      .usage-label {
+        margin-bottom: 7px;
+        color: var(--muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 8px;
+        text-transform: uppercase;
+      }
+
+      .sample-button {
+        min-height: 30px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 6px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 9px;
+      }
+
+      .sample-outline {
+        min-height: 30px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--ink);
+        font-size: 9px;
+      }
+
+      .sample-input {
+        display: flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 9px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .principles {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 16px;
+      }
+
+      .principle {
+        min-height: 126px;
+        padding: 19px;
+        border: 1px solid rgba(23, 25, 29, 0.14);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.5);
+      }
+
+      .principle-index {
+        color: #5468ff;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 9px;
+      }
+
+      .principle h3 {
+        margin: 20px 0 7px;
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .principle p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.55;
+      }
+
+      .toast {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 20;
+        padding: 10px 13px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--ink);
+        color: #fff;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition:
+          opacity 160ms ease,
+          transform 160ms ease;
+      }
+
+      .toast.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .intro > *,
+        .showcase,
+        .palette-section,
+        .principles {
+          animation: reveal 420ms ease both;
+        }
+
+        .showcase {
+          animation-delay: 60ms;
+        }
+
+        .palette-section {
+          animation-delay: 120ms;
+        }
+
+        .principles {
+          animation-delay: 160ms;
+        }
+
+        @keyframes reveal {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      }
+
+      @media (max-width: 1120px) {
+        .intro {
+          grid-template-columns: 1fr;
+          gap: 18px;
+          padding-top: 42px;
+        }
+
+        .showcase {
+          grid-template-columns: 1fr;
+        }
+
+        .palette-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .page-shell {
+          width: min(100% - 24px, 1480px);
+          padding-top: 14px;
+        }
+
+        .masthead {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .view-switcher {
+          width: 100%;
+        }
+
+        .view-button {
+          flex: 1;
+        }
+
+        h1 {
+          font-size: 42px;
+          line-height: 1.02;
+        }
+
+        .preview-workspace {
+          grid-template-columns: 38px 104px minmax(0, 1fr);
+        }
+
+        .preview-sidebar {
+          gap: 12px;
+          padding: 12px 7px;
+        }
+
+        .context-title {
+          font-size: 10px;
+        }
+
+        .context-item {
+          gap: 5px;
+          padding: 0 5px;
+          font-size: 8px;
+        }
+
+        .context-item svg {
+          width: 10px;
+          height: 10px;
+        }
+
+        .context-count {
+          font-size: 7px;
+        }
+
+        .focus-meta {
+          font-size: 7px;
+        }
+
+        .preview-main {
+          padding: 14px 10px;
+        }
+
+        .main-header {
+          gap: 10px;
+        }
+
+        .main-title {
+          font-size: 20px;
+        }
+
+        .primary-button {
+          gap: 5px;
+          padding: 0 8px;
+        }
+
+        .summary-strip {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .summary-item:last-child {
+          display: none;
+        }
+
+        .swatches {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .usage-row,
+        .principles {
+          grid-template-columns: 1fr;
+        }
+
+        .section-heading {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 7px;
+        }
+      }
+
+      @media (max-width: 460px) {
+        .preview-workspace {
+          grid-template-columns: 34px 88px minmax(0, 1fr);
+        }
+
+        .preview-sidebar {
+          gap: 9px;
+          padding: 10px 5px;
+        }
+
+        .context-add {
+          width: 18px;
+          height: 18px;
+        }
+
+        .context-label {
+          margin-bottom: 4px;
+          font-size: 7px;
+        }
+
+        .context-item {
+          min-height: 23px;
+          gap: 4px;
+          padding: 0 4px;
+          font-size: 7px;
+        }
+
+        .context-item svg {
+          width: 9px;
+          height: 9px;
+        }
+
+        .context-count {
+          font-size: 7px;
+        }
+
+        .focus-meta {
+          font-size: 7px;
+        }
+
+        .preview-main {
+          padding: 12px 8px;
+        }
+
+        .main-header {
+          gap: 7px;
+        }
+
+        .main-title {
+          font-size: 18px;
+        }
+
+        .primary-button {
+          width: 27px;
+          min-height: 27px;
+          justify-content: center;
+          gap: 0;
+          padding: 0;
+          font-size: 0;
+        }
+
+        .summary-value {
+          font-size: 13px;
+        }
+
+        .timeline-item {
+          grid-template-columns: 34px minmax(0, 1fr);
+          gap: 5px;
+        }
+
+        .timeline-card {
+          padding: 7px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="masthead">
+        <div class="brand">
+          <div class="brand-mark">L</div>
+          <div>
+            <div class="brand-name">LEEAT</div>
+            <div class="brand-subtitle">COLOR SYSTEM / 01</div>
+          </div>
+        </div>
+
+        <div class="view-switcher" aria-label="主题预览模式">
+          <button class="view-button" type="button" data-view="compare" aria-pressed="true">对比</button>
+          <button class="view-button" type="button" data-view="light" aria-pressed="false">Light</button>
+          <button class="view-button" type="button" data-view="dark" aria-pressed="false">Dark</button>
+        </div>
+      </header>
+
+      <section class="intro">
+        <div>
+          <p class="eyebrow">Leeat Personal Workbench</p>
+          <h1>One system.<br />Two atmospheres.</h1>
+        </div>
+        <p class="intro-copy">
+          同一套信息层级，在浅色里保持轻盈，在深色里保持专注。下面用同一个个人事务工作台示例，检查色板在真实界面中的比例、对比和节奏。
+        </p>
+      </section>
+
+      <section class="showcase" data-view="compare" aria-label="Light 和 Dark 主题界面示例">
+        <article class="theme-card light">
+          <div class="card-head">
+            <div class="theme-label"><span class="theme-dot"></span>Light</div>
+            <div class="theme-meta">SURFACE / PAPER</div>
+          </div>
+
+          <div class="preview-shell">
+            <div class="preview-bar">
+              <div class="preview-brand-group">
+                <span class="preview-logo">L</span>
+                <span class="preview-brand">LEEAT</span>
+                <span class="preview-separator"></span>
+                <span class="preview-context">今日</span>
+              </div>
+            </div>
+
+            <div class="preview-workspace">
+              <div class="preview-rail" aria-hidden="true">
+                <span class="rail-button active"><i data-lucide="house"></i></span>
+                <span class="rail-button"><i data-lucide="inbox"></i></span>
+                <span class="rail-button"><i data-lucide="calendar-days"></i></span>
+                <span class="rail-button"><i data-lucide="notebook-tabs"></i></span>
+                <span class="rail-button"><i data-lucide="bookmark"></i></span>
+                <span class="rail-spacer"></span>
+                <span class="rail-button"><i data-lucide="settings"></i></span>
+              </div>
+
+              <aside class="preview-sidebar" aria-label="今日视图筛选">
+                <div>
+                  <div class="context-head">
+                    <div class="context-title">今日视图</div>
+                    <span class="context-add"><i data-lucide="plus"></i></span>
+                  </div>
+                </div>
+                <div>
+                  <div class="context-label">筛选</div>
+                  <div class="context-list">
+                    <div class="context-item active"><i data-lucide="list-filter"></i><span>全部</span><span class="context-count">8</span></div>
+                    <div class="context-item"><i data-lucide="calendar-check"></i><span>已安排</span><span class="context-count">3</span></div>
+                    <div class="context-item"><i data-lucide="check"></i><span>已完成</span><span class="context-count">3</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="context-label">分类</div>
+                  <div class="context-list">
+                    <div class="context-item"><span class="context-dot"></span><span>工作</span><span class="context-count">4</span></div>
+                    <div class="context-item"><span class="context-dot learning"></span><span>学习</span><span class="context-count">2</span></div>
+                    <div class="context-item"><span class="context-dot life"></span><span>生活</span><span class="context-count">2</span></div>
+                  </div>
+                </div>
+                <div class="focus-card">
+                  <div class="focus-meta"><span>今日完成</span><strong>38%</strong></div>
+                  <div class="focus-track"><div class="focus-value"></div></div>
+                </div>
+              </aside>
+
+              <div class="preview-main">
+                <div class="main-header">
+                  <div>
+                    <div class="date-label">11月4日 · 周三</div>
+                    <div class="main-title">今天，Leeat</div>
+                  </div>
+                  <button class="primary-button" type="button"><i data-lucide="plus"></i>新建</button>
+                </div>
+
+                <div class="summary-strip">
+                  <div class="summary-item">
+                    <div class="summary-value">05</div>
+                    <div class="summary-label">待办事项</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-value">03</div>
+                    <div class="summary-label">日程安排</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-value">1h 20m</div>
+                    <div class="summary-label">专注时间</div>
+                  </div>
+                </div>
+
+                <div class="content-heading">
+                  <div class="content-title">今日时间流</div>
+                  <div class="content-link">查看全部</div>
+                </div>
+
+                <div class="day-spine">
+                  <div class="timeline-item event">
+                    <span class="timeline-dot"></span>
+                    <div class="timeline-time">09:00</div>
+                    <div class="timeline-card">
+                      <div class="timeline-copy">
+                        <div class="timeline-title">设计评审</div>
+                        <div class="timeline-subtitle">产品工作台 · 45 分钟</div>
+                      </div>
+                      <span class="check"><i data-lucide="check"></i></span>
+                    </div>
+                  </div>
+                  <div class="timeline-item done">
+                    <span class="timeline-dot"></span>
+                    <div class="timeline-time">10:30</div>
+                    <div class="timeline-card">
+                      <div class="timeline-copy">
+                        <div class="timeline-title">整理本周任务</div>
+                        <div class="timeline-subtitle">工作 · 重要</div>
+                      </div>
+                      <span class="check"><i data-lucide="check"></i></span>
+                    </div>
+                  </div>
+                  <div class="timeline-item">
+                    <span class="timeline-dot"></span>
+                    <div class="timeline-time">14:00</div>
+                    <div class="timeline-card">
+                      <div class="timeline-copy">
+                        <div class="timeline-title">阅读 Agent 基础</div>
+                        <div class="timeline-subtitle">学习 · 60 分钟</div>
+                      </div>
+                      <span class="check"><i data-lucide="check"></i></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="quick-capture"><i data-lucide="pen-line"></i>记录一条想法...</div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="theme-card dark">
+          <div class="card-head">
+            <div class="theme-label"><span class="theme-dot"></span>Dark</div>
+            <div class="theme-meta">SURFACE / GRAPHITE</div>
+          </div>
+
+          <div class="preview-shell">
+            <div class="preview-bar">
+              <div class="preview-brand-group">
+                <span class="preview-logo">L</span>
+                <span class="preview-brand">LEEAT</span>
+                <span class="preview-separator"></span>
+                <span class="preview-context">今日</span>
+              </div>
+            </div>
+
+            <div class="preview-workspace">
+              <div class="preview-rail" aria-hidden="true">
+                <span class="rail-button active"><i data-lucide="house"></i></span>
+                <span class="rail-button"><i data-lucide="inbox"></i></span>
+                <span class="rail-button"><i data-lucide="calendar-days"></i></span>
+                <span class="rail-button"><i data-lucide="notebook-tabs"></i></span>
+                <span class="rail-button"><i data-lucide="bookmark"></i></span>
+                <span class="rail-spacer"></span>
+                <span class="rail-button"><i data-lucide="settings"></i></span>
+              </div>
+
+              <aside class="preview-sidebar" aria-label="今日视图筛选">
+                <div>
+                  <div class="context-head">
+                    <div class="context-title">今日视图</div>
+                    <span class="context-add"><i data-lucide="plus"></i></span>
+                  </div>
+                </div>
+                <div>
+                  <div class="context-label">筛选</div>
+                  <div class="context-list">
+                    <div class="context-item active"><i data-lucide="list-filter"></i><span>全部</span><span class="context-count">8</span></div>
+                    <div class="context-item"><i data-lucide="calendar-check"></i><span>已安排</span><span class="context-count">3</span></div>
+                    <div class="context-item"><i data-lucide="check"></i><span>已完成</span><span class="context-count">3</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="context-label">分类</div>
+                  <div class="context-list">
+                    <div class="context-item"><span class="context-dot"></span><span>工作</span><span class="context-count">4</span></div>
+                    <div class="context-item"><span class="context-dot learning"></span><span>学习</span><span class="context-count">2</span></div>
+                    <div class="context-item"><span class="context-dot life"></span><span>生活</span><span class="context-count">2</span></div>
+                  </div>
+                </div>
+                <div class="focus-card">
+                  <div class="focus-meta"><span>今日完成</span><strong>38%</strong></div>
+                  <div class="focus-track"><div class="focus-value"></div></div>
+                </div>
+              </aside>
+
+              <div class="preview-main">
+                <div class="main-header">
+                  <div>
+                    <div class="date-label">11月4日 · 周三</div>
+                    <div class="main-title">今天，Leeat</div>
+                  </div>
+                  <button class="primary-button" type="button"><i data-lucide="plus"></i>新建</button>
+                </div>
+
+                <div class="summary-strip">
+                  <div class="summary-item">
+                    <div class="summary-value">05</div>
+                    <div class="summary-label">待办事项</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-value">03</div>
+                    <div class="summary-label">日程安排</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-value">1h 20m</div>
+                    <div class="summary-label">专注时间</div>
+                  </div>
+                </div>
+
+                <div class="content-heading">
+                  <div class="content-title">今日时间流</div>
+                  <div class="content-link">查看全部</div>
+                </div>
+
+                <div class="day-spine">
+                  <div class="timeline-item event">
+                    <span class="timeline-dot"></span>
+                    <div class="timeline-time">09:00</div>
+                    <div class="timeline-card">
+                      <div class="timeline-copy">
+                        <div class="timeline-title">设计评审</div>
+                        <div class="timeline-subtitle">产品工作台 · 45 分钟</div>
+                      </div>
+                      <span class="check"><i data-lucide="check"></i></span>
+                    </div>
+                  </div>
+                  <div class="timeline-item done">
+                    <span class="timeline-dot"></span>
+                    <div class="timeline-time">10:30</div>
+                    <div class="timeline-card">
+                      <div class="timeline-copy">
+                        <div class="timeline-title">整理本周任务</div>
+                        <div class="timeline-subtitle">工作 · 重要</div>
+                      </div>
+                      <span class="check"><i data-lucide="check"></i></span>
+                    </div>
+                  </div>
+                  <div class="timeline-item">
+                    <span class="timeline-dot"></span>
+                    <div class="timeline-time">14:00</div>
+                    <div class="timeline-card">
+                      <div class="timeline-copy">
+                        <div class="timeline-title">阅读 Agent 基础</div>
+                        <div class="timeline-subtitle">学习 · 60 分钟</div>
+                      </div>
+                      <span class="check"><i data-lucide="check"></i></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="quick-capture"><i data-lucide="pen-line"></i>记录一条想法...</div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="palette-section">
+        <div class="section-heading">
+          <h2>Palette tokens</h2>
+          <p>CLICK A COLOR TO COPY</p>
+        </div>
+
+        <div class="palette-grid">
+          <article class="palette-panel light">
+            <div class="palette-title">
+              <strong>Light tokens</strong>
+              <span>10 COLORS</span>
+            </div>
+            <div class="swatches">
+              <button class="swatch" type="button" data-hex="#F2F5F8" style="--swatch: #f2f5f8">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">页面底色</span><span class="swatch-value">#F2F5F8</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#FFFFFF" style="--swatch: #ffffff">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">内容表面</span><span class="swatch-value">#FFFFFF</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#F7F8FA" style="--swatch: #f7f8fa">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">次级表面</span><span class="swatch-value">#F7F8FA</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#1D2129" style="--swatch: #1d2129">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">主文字</span><span class="swatch-value">#1D2129</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#4E5969" style="--swatch: #4e5969">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">正文文字</span><span class="swatch-value">#4E5969</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#86909C" style="--swatch: #86909c">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">次文字</span><span class="swatch-value">#86909C</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#D8DEE9" style="--swatch: #d8dee9">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">边框</span><span class="swatch-value">#D8DEE9</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#5468FF" style="--swatch: #5468ff">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">品牌主色</span><span class="swatch-value">#5468FF</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#7080FF" style="--swatch: #7080ff">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">品牌 Hover</span><span class="swatch-value">#7080FF</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#EEF0FF" style="--swatch: #eef0ff">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">品牌浅底</span><span class="swatch-value">#EEF0FF</span></span>
+              </button>
+            </div>
+            <div class="usage-row" style="--accent: #5468ff">
+              <div class="usage-item"><div class="usage-label">Primary</div><button class="sample-button" type="button">新建事项</button></div>
+              <div class="usage-item"><div class="usage-label">Outline</div><button class="sample-outline" type="button">筛选</button></div>
+              <div class="usage-item"><div class="usage-label">Input</div><div class="sample-input">记录一条想法…</div></div>
+            </div>
+          </article>
+
+          <article class="palette-panel dark">
+            <div class="palette-title">
+              <strong>Dark tokens</strong>
+              <span>10 COLORS</span>
+            </div>
+            <div class="swatches">
+              <button class="swatch" type="button" data-hex="#17191D" style="--swatch: #17191d">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">页面底色</span><span class="swatch-value">#17191D</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#1E2126" style="--swatch: #1e2126">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">内容表面</span><span class="swatch-value">#1E2126</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#25292F" style="--swatch: #25292f">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">次级表面</span><span class="swatch-value">#25292F</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#F1F3F5" style="--swatch: #f1f3f5">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">主文字</span><span class="swatch-value">#F1F3F5</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#C9CDD4" style="--swatch: #c9cdd4">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">正文文字</span><span class="swatch-value">#C9CDD4</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#969CA6" style="--swatch: #969ca6">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">次文字</span><span class="swatch-value">#969CA6</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#30353C" style="--swatch: #30353c">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">边框</span><span class="swatch-value">#30353C</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#7B8AFF" style="--swatch: #7b8aff">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">品牌主色</span><span class="swatch-value">#7B8AFF</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#98A4FF" style="--swatch: #98a4ff">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">品牌 Hover</span><span class="swatch-value">#98A4FF</span></span>
+              </button>
+              <button class="swatch" type="button" data-hex="#6577FF" style="--swatch: #6577ff">
+                <span class="swatch-color"></span>
+                <span class="swatch-info"><span class="swatch-name">品牌 Active</span><span class="swatch-value">#6577FF</span></span>
+              </button>
+            </div>
+            <div class="usage-row" style="--accent: #7b8aff">
+              <div class="usage-item"><div class="usage-label">Primary</div><button class="sample-button" type="button">新建事项</button></div>
+              <div class="usage-item"><div class="usage-label">Outline</div><button class="sample-outline" type="button">筛选</button></div>
+              <div class="usage-item"><div class="usage-label">Input</div><div class="sample-input">记录一条想法…</div></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="principles" aria-label="色彩使用原则">
+        <article class="principle">
+          <span class="principle-index">01 / SURFACE</span>
+          <h3>表面靠层级，不靠阴影</h3>
+          <p>页面、内容表面和次级表面之间保持轻微明度差，主要依靠细边框建立结构。</p>
+        </article>
+        <article class="principle">
+          <span class="principle-index">02 / TEXT</span>
+          <h3>文字只保留两级主次</h3>
+          <p>主文字负责标题和关键内容，次文字承担日期、说明和辅助信息，避免过多灰色层级。</p>
+        </article>
+        <article class="principle">
+          <span class="principle-index">03 / ACCENT</span>
+          <h3>强调色只给主要动作</h3>
+          <p>蓝色用于主按钮、选中状态和关键节点。其他状态通过中性色与少量语义色表达。</p>
+        </article>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script>
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+
+      const showcase = document.querySelector(".showcase");
+      const viewButtons = [...document.querySelectorAll(".view-button")];
+      const toast = document.querySelector("#toast");
+      let toastTimer;
+
+      viewButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const view = button.dataset.view;
+          showcase.dataset.view = view;
+          viewButtons.forEach((item) => {
+            item.setAttribute("aria-pressed", String(item === button));
+          });
+        });
+      });
+
+      document.querySelectorAll(".swatch").forEach((swatch) => {
+        swatch.addEventListener("click", async () => {
+          const hex = swatch.dataset.hex;
+          try {
+            await navigator.clipboard.writeText(hex);
+          } catch {
+            const input = document.createElement("textarea");
+            input.value = hex;
+            input.style.position = "fixed";
+            input.style.opacity = "0";
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand("copy");
+            input.remove();
+          }
+
+          toast.textContent = `${hex} 已复制`;
+          toast.classList.add("visible");
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => toast.classList.remove("visible"), 1500);
+        });
+      });
+    </script>
+  </body>
+</html>
