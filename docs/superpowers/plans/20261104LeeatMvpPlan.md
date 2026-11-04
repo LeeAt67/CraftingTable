@@ -39,7 +39,6 @@ src/
       appShell.tsx
       contextSidebar.tsx
       navRail.tsx
-      topBar.tsx
     today/
       itemTimeline.tsx
       quickCapture.tsx

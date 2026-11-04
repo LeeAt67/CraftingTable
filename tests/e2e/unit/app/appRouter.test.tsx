@@ -7,9 +7,9 @@ describe("AppRouter", () => {
   it("shows home navigation and the context sidebar", () => {
     const router = createMemoryRouter(routes, { initialEntries: ["/"] });
     render(<RouterProvider router={router} />);
-    expect(screen.getByText("LEEAT")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "今日" })).toBeInTheDocument();
     expect(screen.getByText("全部")).toBeInTheDocument();
+    expect(screen.queryByText("LEEAT")).not.toBeInTheDocument();
   });
 
   it("opens the settings placeholder", () => {

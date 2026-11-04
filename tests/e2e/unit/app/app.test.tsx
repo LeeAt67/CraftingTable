@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import App from "@/app";
 
 describe("App", () => {
-  it("renders the Leeat brand", () => {
+  it("renders the workbench without a top application bar", () => {
     render(<App />);
-    expect(screen.getByText("LEEAT")).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "主导航" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "今日" })).toBeInTheDocument();
+    expect(screen.queryByText("LEEAT")).not.toBeInTheDocument();
   });
 });

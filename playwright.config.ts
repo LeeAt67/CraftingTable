@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const apiPort = process.env.API_PORT ?? "3101";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: "**/*.e2e.ts",
@@ -13,7 +15,7 @@ export default defineConfig({
   webServer: [
     {
       command: "pnpm e2e:api",
-      url: "http://127.0.0.1:3101/api/v1/categories",
+      url: `http://127.0.0.1:${apiPort}/api/v1/categories`,
       reuseExistingServer: false,
     },
     {
