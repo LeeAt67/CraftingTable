@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" data-quality-profile="standard">
+  <style>
+    text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+  </style>
+<defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#16A34A"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#9333EA"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#EA580C"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#DC2626"/>
+    </marker>
+    <marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748B"/>
+    </marker>
+  </defs>
+<rect x="0" y="0" width="1200" height="780" fill="#FFFFFF" data-graph-role="background"/>
+<text x="48" y="42" font-size="22" font-weight="600" fill="#111827" text-anchor="start">CraftingTable Agent 状态机</text>
+<text x="48" y="67" font-size="13" font-weight="400" fill="#6B7280" text-anchor="start">Run 与 Step 都只有一个运行态和唯一终态；取消、失败、中断不能只是停止 goroutine</text>
+<rect id="Run 生命周期" x="44" y="92" width="1112" height="282" rx="12" fill="#EFF6FF" fill-opacity="0.32" stroke="#BFDBFE" stroke-width="1.25" data-graph-role="container"/>
+<text x="62" y="116" font-size="13" font-weight="600" fill="#2563EB" text-anchor="start">Run 生命周期</text>
+<line x1="60" y1="128" x2="1140" y2="128" stroke="#BFDBFE" stroke-width="1"/>
+<rect id="Step 生命周期与 Executor 循环" x="44" y="402" width="1112" height="292" rx="12" fill="#FAF5FF" fill-opacity="0.32" stroke="#E9D5FF" stroke-width="1.25" data-graph-role="container"/>
+<text x="62" y="426" font-size="13" font-weight="600" fill="#9333EA" text-anchor="start">Step 生命周期与 Executor 循环</text>
+<line x1="60" y1="438" x2="1140" y2="438" stroke="#E9D5FF" stroke-width="1"/>
+<circle cx="100" cy="222" r="8" fill="#111827" data-graph-role="decoration"/>
+<g id="g-run-running">
+<rect id="run-running" data-node-id="run-running" data-graph-role="node" x="198" y="186" width="210" height="72" rx="8" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="208" y="198" width="26" height="26" rx="6" fill="#EFF6FF" stroke="#BFDBFE"/>
+<text x="221" y="216" font-size="11" font-weight="600" fill="#2563EB" text-anchor="middle">R</text>
+<text x="246" y="215" font-size="14" font-weight="600" fill="#111827" text-anchor="start">running</text>
+<text x="216" y="237" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">Executor 持有 runCtx</text>
+</g>
+<g id="g-run-completed">
+<rect id="run-completed" data-node-id="run-completed" data-graph-role="node" x="486" y="136" width="176" height="68" rx="8" fill="#FFFFFF" stroke="#BBF7D0" stroke-width="1.5"/>
+<rect x="496" y="148" width="26" height="26" rx="6" fill="#F0FDF4" stroke="#BBF7D0"/>
+<text x="509" y="166" font-size="11" font-weight="600" fill="#16A34A" text-anchor="middle">C</text>
+<text x="534" y="165" font-size="14" font-weight="600" fill="#111827" text-anchor="start">completed</text>
+<text x="504" y="187" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">最终答案已提交</text>
+</g>
+<g id="g-run-failed">
+<rect id="run-failed" data-node-id="run-failed" data-graph-role="node" x="746" y="136" width="176" height="68" rx="8" fill="#FFFFFF" stroke="#FECACA" stroke-width="1.5"/>
+<rect x="756" y="148" width="26" height="26" rx="6" fill="#FEF2F2" stroke="#FECACA"/>
+<text x="769" y="166" font-size="11" font-weight="600" fill="#DC2626" text-anchor="middle">F</text>
+<text x="794" y="165" font-size="14" font-weight="600" fill="#111827" text-anchor="start">failed</text>
+<text x="764" y="187" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">稳定错误码</text>
+</g>
+<g id="g-run-cancelled">
+<rect id="run-cancelled" data-node-id="run-cancelled" data-graph-role="node" x="486" y="260" width="176" height="68" rx="8" fill="#FFFFFF" stroke="#FED7AA" stroke-width="1.5"/>
+<rect x="496" y="272" width="26" height="26" rx="6" fill="#FFF7ED" stroke="#FED7AA"/>
+<text x="509" y="290" font-size="11" font-weight="600" fill="#EA580C" text-anchor="middle">X</text>
+<text x="534" y="289" font-size="14" font-weight="600" fill="#111827" text-anchor="start">cancelled</text>
+<text x="504" y="311" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">用户主动停止</text>
+</g>
+<g id="g-run-interrupted">
+<rect id="run-interrupted" data-node-id="run-interrupted" data-graph-role="node" x="746" y="260" width="176" height="68" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5"/>
+<rect x="756" y="272" width="26" height="26" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+<text x="769" y="290" font-size="11" font-weight="600" fill="#64748B" text-anchor="middle">I</text>
+<text x="794" y="289" font-size="14" font-weight="600" fill="#111827" text-anchor="start">interrupted</text>
+<text x="764" y="311" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">进程重启清理</text>
+</g>
+<path id="init-run" data-edge-id="init-run" data-graph-role="edge" d="M108,222 L198,222" fill="none" stroke="#64748B" stroke-width="1.7" marker-end="url(#arrow-gray)"/>
+<path id="run-complete" data-edge-id="run-complete" data-graph-role="edge" d="M408,196 L486,196" fill="none" stroke="#16A34A" stroke-width="1.7" marker-end="url(#arrow-green)"/>
+<text x="447" y="188" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="run-complete">finish</text>
+<path id="run-fail" data-edge-id="run-fail" data-graph-role="edge" d="M350,258 L350,370 L948,370 L948,170 L922,170" fill="none" stroke="#DC2626" stroke-width="1.7" marker-end="url(#arrow-red)"/>
+<text x="366" y="286" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start" data-owner="run-fail">provider / policy error</text>
+<path id="run-cancel" data-edge-id="run-cancel" data-graph-role="edge" d="M408,240 L486,240 L486,260" fill="none" stroke="#EA580C" stroke-width="1.7" marker-end="url(#arrow-orange)"/>
+<text x="454" y="232" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="run-cancel">cancel</text>
+<path id="run-interrupt" data-edge-id="run-interrupt" data-graph-role="edge" d="M408,258 L438,258 L438,358 L822,358 L822,328" fill="none" stroke="#64748B" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-gray)"/>
+<text x="650" y="350" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="run-interrupt">startup reconciliation</text>
+<circle cx="100" cy="552" r="8" fill="#111827" data-graph-role="decoration"/>
+<g id="g-step-running">
+<rect id="step-running" data-node-id="step-running" data-graph-role="node" x="198" y="516" width="210" height="72" rx="8" fill="#FFFFFF" stroke="#E9D5FF" stroke-width="1.5"/>
+<rect x="208" y="528" width="26" height="26" rx="6" fill="#FAF5FF" stroke="#E9D5FF"/>
+<text x="221" y="546" font-size="11" font-weight="600" fill="#9333EA" text-anchor="middle">S</text>
+<text x="246" y="545" font-size="14" font-weight="600" fill="#111827" text-anchor="start">step.running</text>
+<text x="216" y="567" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">一次 model / tool / MCP</text>
+</g>
+<g id="g-step-completed">
+<rect id="step-completed" data-node-id="step-completed" data-graph-role="node" x="470" y="474" width="176" height="68" rx="8" fill="#FFFFFF" stroke="#BBF7D0" stroke-width="1.5"/>
+<rect x="480" y="486" width="26" height="26" rx="6" fill="#F0FDF4" stroke="#BBF7D0"/>
+<text x="493" y="504" font-size="11" font-weight="600" fill="#16A34A" text-anchor="middle">C</text>
+<text x="518" y="503" font-size="14" font-weight="600" fill="#111827" text-anchor="start">completed</text>
+<text x="488" y="525" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">有界操作成功</text>
+</g>
+<g id="g-step-failed">
+<rect id="step-failed" data-node-id="step-failed" data-graph-role="node" x="710" y="474" width="176" height="68" rx="8" fill="#FFFFFF" stroke="#FECACA" stroke-width="1.5"/>
+<rect x="720" y="486" width="26" height="26" rx="6" fill="#FEF2F2" stroke="#FECACA"/>
+<text x="733" y="504" font-size="11" font-weight="600" fill="#DC2626" text-anchor="middle">F</text>
+<text x="758" y="503" font-size="14" font-weight="600" fill="#111827" text-anchor="start">failed</text>
+<text x="728" y="525" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">记录失败原因</text>
+</g>
+<g id="g-step-cancelled">
+<rect id="step-cancelled" data-node-id="step-cancelled" data-graph-role="node" x="470" y="602" width="176" height="68" rx="8" fill="#FFFFFF" stroke="#FED7AA" stroke-width="1.5"/>
+<rect x="480" y="614" width="26" height="26" rx="6" fill="#FFF7ED" stroke="#FED7AA"/>
+<text x="493" y="632" font-size="11" font-weight="600" fill="#EA580C" text-anchor="middle">X</text>
+<text x="518" y="631" font-size="14" font-weight="600" fill="#111827" text-anchor="start">cancelled</text>
+<text x="488" y="653" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">runCtx 取消</text>
+</g>
+<g id="g-step-interrupted">
+<rect id="step-interrupted" data-node-id="step-interrupted" data-graph-role="node" x="710" y="602" width="176" height="68" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5"/>
+<rect x="720" y="614" width="26" height="26" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+<text x="733" y="632" font-size="11" font-weight="600" fill="#64748B" text-anchor="middle">I</text>
+<text x="758" y="631" font-size="14" font-weight="600" fill="#111827" text-anchor="start">interrupted</text>
+<text x="728" y="653" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">进程恢复扫描</text>
+</g>
+<g id="g-step-exhausted">
+<rect id="step-exhausted" data-node-id="step-exhausted" data-graph-role="node" x="944" y="474" width="176" height="68" rx="8" fill="#FFFFFF" stroke="#FECACA" stroke-width="1.5"/>
+<rect x="954" y="486" width="26" height="26" rx="6" fill="#FEF2F2" stroke="#FECACA"/>
+<text x="967" y="504" font-size="11" font-weight="600" fill="#DC2626" text-anchor="middle">!</text>
+<text x="992" y="503" font-size="14" font-weight="600" fill="#111827" text-anchor="start">Run failed</text>
+<text x="962" y="525" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">maxSteps 耗尽</text>
+</g>
+<circle cx="1028" cy="594" r="8" fill="#111827" data-graph-role="decoration"/>
+<circle cx="1028" cy="594" r="13" fill="none" stroke="#111827" stroke-width="2" data-graph-role="decoration"/>
+<path id="init-step" data-edge-id="init-step" data-graph-role="edge" d="M108,552 L198,552" fill="none" stroke="#64748B" stroke-width="1.7" marker-end="url(#arrow-gray)"/>
+<path id="step-finish" data-edge-id="step-finish" data-graph-role="edge" d="M408,540 L438,540 L438,508 L470,508" fill="none" stroke="#16A34A" stroke-width="1.7" marker-end="url(#arrow-green)"/>
+<text x="440" y="532" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="step-finish">success</text>
+<path id="step-fail" data-edge-id="step-fail" data-graph-role="edge" d="M330,588 L330,690 L926,690 L926,508 L886,508" fill="none" stroke="#DC2626" stroke-width="1.7" marker-end="url(#arrow-red)"/>
+<text x="366" y="632" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start" data-owner="step-fail">error</text>
+<path id="step-cancel" data-edge-id="step-cancel" data-graph-role="edge" d="M408,574 L470,574 L470,602" fill="none" stroke="#EA580C" stroke-width="1.7" marker-end="url(#arrow-orange)"/>
+<text x="438" y="571" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="step-cancel">cancel</text>
+<path id="step-interrupt" data-edge-id="step-interrupt" data-graph-role="edge" d="M408,588 L438,588 L438,686 L798,686 L798,670" fill="none" stroke="#64748B" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-gray)"/>
+<text x="540" y="678" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="step-interrupt">crash scan</text>
+<path id="step-next" data-edge-id="step-next" data-graph-role="edge" d="M558,474 L558,444 L296,444 L296,516" fill="none" stroke="#9333EA" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-purple)"/>
+<text x="430" y="436" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="step-next">无最终答案且未达 maxSteps → 下一 Step</text>
+<path id="step-limit" data-edge-id="step-limit" data-graph-role="edge" d="M646,508 L710,508" fill="none" stroke="#DC2626" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-red)"/>
+<text x="678" y="500" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="step-limit">last step</text>
+<path id="run-final-failed" data-edge-id="run-final-failed" data-graph-role="edge" d="M798,474 L798,444 L1030,444 L1030,474" fill="none" stroke="#DC2626" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-red)"/>
+<path id="step-final" data-edge-id="step-final" data-graph-role="edge" d="M974,542 L988,542 L988,594" fill="none" stroke="#64748B" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-gray)"/>
+<rect x="48" y="720" width="1104" height="34" rx="7" fill="#F8FAFC" stroke="#E5E7EB"/>
+<text x="64" y="742" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">RunPolicy：maxSteps · maxDurationMs · idleTimeoutMs · maxConsecutiveFailures；所有限制都由 Executor 检查并收敛到唯一终态。</text>
+<g id="legend" data-graph-role="legend">
+<line x1="64" y1="772" x2="92" y2="772" stroke="#16A34A" stroke-width="1.7" marker-end="url(#arrow-green)"/>
+<text x="100" y="776" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">成功</text>
+<line x1="206" y1="772" x2="234" y2="772" stroke="#DC2626" stroke-width="1.7" marker-end="url(#arrow-red)"/>
+<text x="242" y="776" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">失败</text>
+<line x1="348" y1="772" x2="376" y2="772" stroke="#EA580C" stroke-width="1.7" marker-end="url(#arrow-orange)"/>
+<text x="384" y="776" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">取消</text>
+<line x1="490" y1="772" x2="518" y2="772" stroke="#64748B" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-gray)"/>
+<text x="526" y="776" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">中断</text>
+</g>
+</svg>

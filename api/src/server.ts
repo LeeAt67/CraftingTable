@@ -7,7 +7,21 @@ const databasePath = resolve(
 );
 mkdirSync(dirname(databasePath), { recursive: true });
 
-const app = createApp({ databasePath, logger: true });
+const agentConfigured =
+  process.env.AGENT_API_BASE_URL &&
+  process.env.AGENT_API_KEY &&
+  process.env.AGENT_MODEL;
+const app = createApp({
+  databasePath,
+  logger: true,
+  agent: agentConfigured
+    ? {
+        baseUrl: process.env.AGENT_API_BASE_URL!,
+        apiKey: process.env.AGENT_API_KEY!,
+        model: process.env.AGENT_MODEL!,
+      }
+    : undefined,
+});
 
 await app.listen({
   host: "127.0.0.1",

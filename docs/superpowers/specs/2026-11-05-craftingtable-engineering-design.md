@@ -1,15 +1,16 @@
-# Leeat 工程化设计规范
+# CraftingTable 工程化设计规范
 
 日期：2026-11-05
-状态：待评审
-范围：Leeat 的代码组织、架构边界、错误处理、契约、测试、安全与文档治理
+状态：已确认
+实施状态：分阶段落地
+范围：CraftingTable 的代码组织、架构边界、错误处理、契约、测试、安全与文档治理
 适用范围：Desktop、Web，以及后续移动端共用的前端代码
-关联设计：[Leeat Agent 设计](./2026-11-05-leeat-agent-design.md)
-术语基线：[Leeat 术语表](../../glossary.md)
+关联设计：[CraftingTable Agent 设计](./2026-11-05-craftingtable-agent-design.md)
+术语基线：[CraftingTable 术语表](../../glossary.md)
 
 ## 1. 目的
 
-本文定义 Leeat 在进入实现和持续迭代后必须遵守的工程规则。
+本文定义 CraftingTable 在进入实现和持续迭代后必须遵守的工程规则。
 
 规范的目标不是复制大型团队流程，而是让以下问题在提交代码前就能被发现：
 
@@ -20,7 +21,9 @@
 - 文档继续描述已经废弃的技术方案。
 - 测试数量增加，但关键失败路径仍没有覆盖。
 
-本文只保留能够降低 Leeat 返工成本的规则。每条规则都应能通过代码结构、类型、测试、脚本或评审清单验证。
+本文只保留能够降低 CraftingTable 返工成本的规则。每条规则都应能通过代码结构、类型、测试、脚本或评审清单验证。
+
+本文是长期最高规格，不因产品所处生命周期或当前交付范围而删减要求。产品范围和实施顺序可以分阶段，规范目标不能降级。每项能力必须标记为 `required`、`bootstrap` 或 `enforcing`，并明确验收命令和转为阻塞门禁的时点。
 
 ## 2. 核心原则
 
@@ -28,16 +31,17 @@
 2. **单一事实源**：业务状态、错误码、协议、术语和设计 Token 都只能有一个权威来源。
 3. **错误是数据**：I/O 和协议失败通过 `Result<T>` 返回；程序缺陷仍使用异常，由错误边界处理。
 4. **Parse，don't cast**：外部数据先校验再使用，禁止把 `unknown`、JSON 或第三方响应直接断言成领域类型。
-5. **默认增量验证**：修改什么就验证什么；全量门禁只在合并、发布或跨模块高风险改动时运行。
+5. **完整目标，分阶段强制**：规范保留全部最终门禁；开发期按改动范围增量验证，但不得把未启用描述成不需要。
 6. **桌面端不是浏览器**：Electron 的 IPC、文件、外链、快捷键、离线启动和打包行为必须在真实桌面进程中验证。
 7. **文档描述当前事实或明确标注状态**：过时方案不继续伪装成当前设计。
+8. **规范高于当前实现**：现有原型不满足规范时，结论是迁移实现，不是降低规范。
 
 ## 3. 目标与非目标
 
 ### 3.1 目标
 
 - 前端保持 React、TypeScript、Vite、ShadcnUI、Zustand 和 MVC。
-- 后端保持 Go 模块化单体，不为 MVP 拆分微服务。
+- 后端保持 Go 模块化单体，当前阶段不拆分微服务。
 - Desktop 采用本地优先架构，Web 复用同一套 API 和领域契约。
 - MVC 的 Model、Effect、Store、View 有明确且可检查的依赖方向。
 - Agent 流式协议能够独立测试，不依赖真实模型。
@@ -45,13 +49,15 @@
 - 设计系统、日志安全和文档链接有自动检查入口。
 - 首个可交付版本是 Windows Desktop，Go sidecar 同时承载今日和 Agent；现有 Fastify 原型只作为迁移期间的对照实现。
 
-### 3.2 非目标
+### 3.2 阶段边界
 
-- 当前 MVP 不引入 Monorepo、Turborepo、Feature Flag、MR Gate、多环境分支或生产从库。
+以下只是当前实施阶段的非目标，不改变长期规范：
+
+- 当前阶段不引入 Monorepo、Turborepo、Feature Flag、MR Gate、多环境分支或生产从库。
 - 不引入 TanStack Query 代替 Zustand 业务状态。
 - 不强制所有函数都返回 `Result<T>`。
 - 不为个人项目复制大型团队的组织流程和发布审批。
-- 不在此阶段建设 Agent Evaluation Platform。
+- 不在此阶段建设独立 Agent Evaluation Platform。
 
 ### 3.3 反目标
 
@@ -86,9 +92,17 @@ electron/                     Electron 主进程与 preload
   preload/
 
 server/                       Go 模块化单体
-  cmd/leeatd/
+  cmd/craftingtabled/
   internal/
     agent/
+      domain/
+      ports/
+      core/
+      application/
+      access/
+      adapters/
+        provider/
+        persistence/
     today/
     platform/
       httpapi/
@@ -112,6 +126,12 @@ scripts/                      检查脚本和开发工具
 ```
 
 `contracts` 在接口尚未稳定时可以先保存手写类型和样例。接口稳定后，应以 Go 服务端或独立 JSON Schema 为源生成 TypeScript 类型，并增加漂移检查。
+
+仓库根目录保留一个 `go.mod`，`server/` 属于该模块。这样既维持 `server` 的代码边界，又能让根级 `tests/e2e/integration` 中的 Go 黑盒测试被明确纳入测试命令。Go 命令固定为：
+
+```text
+go test ./server/... ./tests/e2e/integration/...
+```
 
 ## 5. MVC 与依赖边界
 
@@ -166,14 +186,36 @@ Effect 的闭包或 `ref` 可以保存 `AbortController`、当前订阅等短期
 Go 后端采用模块化单体：
 
 ```text
-HTTP Controller
-  -> Application Controller
-  -> Domain Model
-  -> Repository
-  -> SQLite / PostgreSQL
+Experience
+  -> Access
+  -> Application
+  -> Core
+
+Adapters / Infrastructure
+  -> 实现 Application 或 Core 拥有的 Port
+
+Bootstrap composition root
+  -> 创建具体 Adapter
+  -> 注入 Port 实现
 ```
 
-HTTP Controller 只负责解码、校验、调用应用逻辑和序列化响应。Repository 不依赖 HTTP，Agent Runtime 不直接访问数据库，数据库事务内不调用模型或其他外部 I/O。
+| 层 | 包边界 | 允许依赖 | 禁止依赖 |
+| --- | --- | --- | --- |
+| Experience | `src`、`electron` | Access 暴露的 HTTP/SSE 与受控桥接接口 | Go Domain、Repository、Provider SDK |
+| Access | `server/internal/agent/access`、`platform/httpapi` | Application、Domain 的公开契约 | Core 内部执行状态、具体 Repository |
+| Application | `server/internal/agent/application` | Core、Application/Core 定义的 Port、Domain | HTTP Controller、SSE 编码器、Provider SDK、具体数据库 |
+| Core | `server/internal/agent/core`、`agent/domain`、`agent/ports` | Domain、Port 和标准库 | Access、Adapters、SQLite、PostgreSQL、Electron、React |
+| Adapters / Infrastructure | `agent/adapters`、`platform` | Port、Domain、具体 SDK 或数据库驱动 | UI、HTTP Handler、Application 用例内部实现 |
+
+端口所有权规则：
+
+- `RuntimePort` 和 `RepositoryPort` 等接口由 Application/Core 需要的一方定义，不按具体供应商或数据库设计。
+- Provider Adapter 实现 `RuntimePort`；Persistence Adapter 实现 `RepositoryPort`。
+- Core 只持有接口和领域对象，不知道当前注入的是 Fake Runtime、OpenAI-compatible Provider、SQLite 还是 PostgreSQL。
+- 具体实现只在 `server/cmd/craftingtabled` 的 composition root 中创建和注入。
+- Logger、Clock、ID 和 Telemetry 通过基础设施接口注入，业务代码不直接导入厂商 SDK。
+
+HTTP Controller 只负责解码、校验、调用 Application 用例和序列化响应。Repository 不依赖 HTTP，Agent Runtime 不直接访问数据库，数据库事务内不调用模型或其他外部 I/O。
 
 Agent 的执行生命周期不能绑定到一次 HTTP 连接：
 
@@ -189,7 +231,8 @@ Agent 的执行生命周期不能绑定到一次 HTTP 连接：
 - 禁止用 `as SomeDomainType` 跳过运行时校验；类型断言只允许用于已经验证或语言本身无法表达的场景。
 - 自建函数统一使用箭头函数；React 组件仍按 shadcn 现有写法处理。
 - 文件命名沿用现有 lowerCamelCase，例如 `agentStore.ts`；React 组件名使用 PascalCase。
-- 所有函数使用中文 TSDoc，包含职责、`@param`、`@returns`、副作用和失败语义。
+- 公共 API、Model/Effect 边界、流、事务、重试和安全逻辑必须使用完整中文 TSDoc，包含职责、参数、返回值、副作用和失败语义。
+- 简单内部函数由类型、命名和测试表达职责；只有非显然行为、竞态、性能和约束需要注释。禁止生成重复代码字面含义的机械 TSDoc。
 - 注释解释原因、约束、竞态和业务规则，不复述代码字面含义。
 - 注释与实现不一致视为缺陷。
 
@@ -201,6 +244,7 @@ Agent 的执行生命周期不能绑定到一次 HTTP 连接：
 - 对外错误必须有稳定错误码；内部错误使用 `%w` 保留因果链。
 - 只有启动期不变量被破坏时才允许 `panic`，请求处理路径不得 panic 作为控制流。
 - 所有外部调用接受 `context.Context`，取消和超时向下传递。
+- 执行取消与终态持久化使用不同 context。执行 context 取消后，终态写入使用 `context.WithoutCancel` 派生出的有界持久化 context，确保取消、失败和中断状态能够落库。
 - 数据库查询必须有边界，列表默认分页或限量，禁止无界全表读取。
 - 会话、消息、事件和日志查询都必须使用 limit 或游标分页；默认上限写入 API 契约，不能只靠调用方自觉传参。
 - 事务内只执行数据库操作，不调用模型、HTTP、文件系统或对象存储。
@@ -213,7 +257,7 @@ Agent 的执行生命周期不能绑定到一次 HTTP 连接：
 Model 和协议适配器统一返回：
 
 ```ts
-type Result<T, E extends LeeatError = LeeatError> =
+type Result<T, E extends CraftingTableError = CraftingTableError> =
   | readonly [data: T, error: null]
   | readonly [data: null, error: E]
 ```
@@ -221,10 +265,30 @@ type Result<T, E extends LeeatError = LeeatError> =
 错误不是裸 `Error`：
 
 ```ts
-type LeeatErrorKind =
+type CraftingTableErrorCode =
+  | "VALIDATION_ERROR"
+  | "NETWORK_ERROR"
+  | "REQUEST_CANCELLED"
+  | "AGENT_SESSION_NOT_FOUND"
+  | "AGENT_SESSION_BUSY"
+  | "AGENT_REQUEST_ALREADY_PROCESSED"
+  | "AGENT_REQUEST_ID_CONFLICT"
+  | "AGENT_RUN_NOT_FOUND"
+  | "AGENT_MESSAGE_NOT_RETRYABLE"
+  | "AGENT_NOT_CONFIGURED"
+  | "AGENT_PROVIDER_FAILED"
+  | "AGENT_PROVIDER_TIMEOUT"
+  | "AGENT_STEP_LIMIT_EXCEEDED"
+  | "AGENT_INTERNAL_FAILED"
+  | "PROTOCOL_INVALID_METADATA"
+  | "PROTOCOL_UNEXPECTED_EOF"
+  | "INTERNAL_ERROR"
+
+type CraftingTableErrorKind =
   | "network"
   | "http"
   | "validation"
+  | "not_found"
   | "protocol"
   | "auth"
   | "conflict"
@@ -232,12 +296,13 @@ type LeeatErrorKind =
   | "server"
   | "unknown"
 
-type LeeatError = {
-  code: string
-  kind: LeeatErrorKind
+type CraftingTableError = {
+  code: CraftingTableErrorCode
+  kind: CraftingTableErrorKind
   message: string
   retryable: boolean
   requestId?: string
+  details?: Record<string, unknown>
   cause?: unknown
 }
 ```
@@ -246,6 +311,7 @@ type LeeatError = {
 
 - `message` 面向用户，不包含堆栈、密钥或第三方响应原文。
 - `code` 面向程序分支，必须稳定、可枚举。
+- `details` 只承载已经 Schema 化的业务恢复数据，不能放堆栈、第三方原文或任意字符串。
 - `cause` 只用于开发日志和测试，不直接渲染。
 - `cancelled` 是用户主动取消的正常结果，不显示错误 Toast。
 - Effect 使用 `const [data, error] = await model.action()` 分支，不在每个调用点重复 `try/catch`。
@@ -269,10 +335,13 @@ type LeeatError = {
 {
   "error": {
     "code": "AGENT_SESSION_NOT_FOUND",
-    "kind": "http",
+    "kind": "not_found",
     "message": "会话不存在",
     "retryable": false,
-    "requestId": "req_123"
+    "requestId": "req_123",
+    "details": {
+      "sessionId": "session-id"
+    }
   }
 }
 ```
@@ -287,6 +356,28 @@ type LeeatError = {
 
 HTTP 状态码表达传输和资源状态，`code` 表达业务分支，两者不能互相替代。
 
+Agent 错误矩阵固定如下；“流内”表示 HTTP 已经进入 SSE，只能通过 `data-agent-error` 和 `error` chunk 表达：
+
+| code | HTTP 或流内 | kind | retryable | details |
+| --- | --- | --- | --- | --- |
+| `VALIDATION_ERROR` | 400 | validation | false | 字段路径和可公开原因 |
+| `REQUEST_CANCELLED` | 客户端流桥 | cancelled | true | `requestId` |
+| `AGENT_SESSION_NOT_FOUND` | 404 | not_found | false | `sessionId` |
+| `AGENT_SESSION_BUSY` | 409 | conflict | true | `sessionId`、当前 `runId` |
+| `AGENT_REQUEST_ALREADY_PROCESSED` | 409 | conflict | false | 原 `runId`、最终 `status` |
+| `AGENT_REQUEST_ID_CONFLICT` | 409 | conflict | false | `clientRequestId` |
+| `AGENT_RUN_NOT_FOUND` | 404 | not_found | false | `runId` |
+| `AGENT_MESSAGE_NOT_RETRYABLE` | 409 | conflict | false | `assistantMessageId`、当前 `status` |
+| `AGENT_NOT_CONFIGURED` | 503 | server | false | 缺失的配置项名称，不含值 |
+| `AGENT_PROVIDER_FAILED` | 502 或流内 | server | true | 稳定供应商类别，不含原始响应 |
+| `AGENT_PROVIDER_TIMEOUT` | 504 或流内 | server | true | `phase`、`timeoutMs` |
+| `AGENT_STEP_LIMIT_EXCEEDED` | 流内 | server | false | `maxSteps`、`completedSteps` |
+| `AGENT_INTERNAL_FAILED` | 500 或流内 | server | true | `runId` 和可公开阶段，不含堆栈 |
+| `PROTOCOL_INVALID_METADATA` | 前端适配器 | protocol | false | 缺失字段和 chunk 类型 |
+| `PROTOCOL_UNEXPECTED_EOF` | 前端适配器 | protocol | true | 最后收到的 chunk 类型 |
+
+未知服务端错误统一映射为 `AGENT_INTERNAL_FAILED` 或 `INTERNAL_ERROR`。任何新增错误码都必须同时补入此表、前端映射和契约测试。
+
 ## 9. API 与契约
 
 - API 前缀固定为 `/api/v1`。
@@ -296,17 +387,18 @@ HTTP 状态码表达传输和资源状态，`code` 表达业务分支，两者�
 - 时间以 UTC ISO 8601 传输和保存，展示时转换为用户本地时区。
 - 可能产生重复数据的写请求携带 `clientRequestId`，用于重试和幂等判定；天然幂等的取消操作可以不携带。
 - 创建会话、发送消息和重试必须携带 `clientRequestId`；同一标识只能对应一个请求语义，不能拿相同标识发送不同正文或不同助手消息。
+- 幂等记录必须保存规范化请求摘要 `requestHash`，至少覆盖正文、消息 ID、模型、模式和附件引用；不得只凭唯一键判断是否为同一请求。
 - 请求和响应必须经过校验后才能进入领域层。
 - 列表和会话详情必须有明确上限。默认会话列表每次 30 条，默认消息详情每次 40 条，使用游标读取更早数据。
 - API 契约变更必须同时更新类型、Schema、测试和文档。
 
-跨语言契约在 MVP 阶段可以保持手写，但必须满足：
+跨语言契约在生成链建立前可以先手写，但必须满足：
 
 - Go 响应用例保存在 `contracts` 或 `tests/e2e/support`。
 - TypeScript Schema 对同一用例校验。
 - 契约测试失败时，不允许只修改前端类型来“适配”。
 
-接口稳定后增加 TypeScript 类型生成和漂移检查，不手工维护两份同义响应类型。
+接口稳定后必须增加 TypeScript 类型生成和漂移检查，不长期手工维护两份同义响应类型。
 
 ## 10. 状态与数据所有权
 
@@ -327,6 +419,26 @@ HTTP 状态码表达传输和资源状态，`code` 表达业务分支，两者�
 - 输入框发送必须判断 IME 组合状态，避免中文选词时误提交。
 - 禁止新增业务硬编码颜色；例外只允许二维码、遮罩、SVG 资产等明确场景。
 
+`src/styles/tokens.css` 是颜色值的权威来源。文档和原型只使用以下语义 Token：
+
+| Token | Light | Dark |
+| --- | --- | --- |
+| `background` | `#F2F5F8` | `#17191D` |
+| `surface` | `#FFFFFF` | `#1E2126` |
+| `surfaceSubtle` | `#F7F8FA` | `#25292F` |
+| `textPrimary` | `#1D2129` | `#F1F3F5` |
+| `textBody` | `#4E5969` | `#C9CDD4` |
+| `textSecondary` | `#86909C` | `#969CA6` |
+| `border` | `#D8DEE9` | `#30353C` |
+| `brand` | `#5468FF` | `#7B8AFF` |
+| `brandHover` | `#7080FF` | `#98A4FF` |
+| `brandSoft` | `#EEF0FF` | `rgba(123, 138, 255, 0.14)` |
+| `success` | `#00B42A` | `#46D16C` |
+| `destructive` | `#D92D20` | `#F97066` |
+| `radius` | `8px` | `8px` |
+
+颜色值变更必须同时更新 Token 源文件、本文表格、主题测试和受影响的视觉原型。禁止只改截图或文档中的一处分叉值。
+
 工程检查入口：
 
 - `pnpm check:tokens` 扫描新增硬编码颜色。
@@ -336,7 +448,7 @@ HTTP 状态码表达传输和资源状态，`code` 表达业务分支，两者�
 
 ### 12.1 目录
 
-面向产品行为、API、契约和桌面能力的测试统一位于 `tests/e2e`：
+这是 CraftingTable 有意采用的集中测试布局：面向产品行为、API、契约和桌面能力的测试统一位于 `tests/e2e`。集中布局不降低测试层级，`unit`、`integration`、浏览器流程和 Electron 流程必须分别可独立执行。
 
 ```text
 tests/e2e/
@@ -351,6 +463,8 @@ tests/e2e/
 
 `tests/e2e/integration/agent` 优先启动真实 Go 测试进程并通过 HTTP 观察行为。它不导入 `server/internal`；需要观察内部状态时，通过 API、固定时钟或测试数据库断言，而不是绕过应用边界。
 
+根级 `go.mod` 必须覆盖 `server/` 和 `tests/e2e/integration`。若未来改用子目录 Go 模块，则必须在同一变更中更新测试命令和 CI，不能让 Go 测试落在模块外。
+
 ### 12.2 命名
 
 - Vitest：`*.test.ts` 或 `*.test.tsx`
@@ -359,6 +473,8 @@ tests/e2e/
 - Go 外部集成测试：`*.integration_test.go`
 - Go package 白盒测试：`*_test.go`
 - 测试支持文件不以测试后缀命名，避免被误执行
+
+Playwright 配置必须同时收集 `**/*.e2e.ts` 和 `**/*.desktop.ts`。浏览器项目不得加载 `.desktop.ts`，Electron 项目不得用浏览器页面冒充桌面测试。
 
 ### 12.3 验证矩阵
 
@@ -370,11 +486,11 @@ tests/e2e/
 | Go Handler / Repository | `tests/e2e` HTTP 黑盒测试；未导出纯逻辑可加 package `_test.go` |
 | API 契约 | TypeScript Schema 与 Go 响应 fixture 双向验证 |
 | 页面交互 | 相关 Playwright module 测试 |
-| 主题或响应式 | 390px 与 1440px 的 Light / Dark 测试 |
+| 主题或响应式 | 布局冒烟覆盖 390px 与 1440px；布局改动必须覆盖 390px、768px、1024px 和 1440px 的 Light / Dark |
 | Electron 或 preload | 真实 Electron 进程中的 `.desktop.ts` 测试 |
 | 跨模块或发布前 | 类型检查、全部 unit/integration、目标 E2E 和构建 |
 
-全量 `pnpm test`、`go test ./...` 和全部 Playwright 项目只在发布、合并或用户明确要求时运行。
+全量 `pnpm test`、`go test ./server/... ./tests/e2e/integration/...` 和全部 Playwright 项目属于发布与合并门禁。开发期可以只运行相关子集，但不得删除最终门禁。
 
 ### 12.4 测试数据
 
@@ -464,27 +580,28 @@ pnpm build
 ```text
 pnpm typecheck
 pnpm test
-go test ./...
+go test ./server/... ./tests/e2e/integration/...
 pnpm test:e2e
 pnpm build
 ```
 
 任何被跳过的验证必须在交付说明中写明原因，不能把“没有运行”描述成“已通过”。
 
-## 16. 首期实施范围
+## 16. 分阶段实施
 
-第一批只建立以下工程能力：
+以下九项全部是最终必须满足的规范目标。`bootstrap` 表示需要先建立骨架，`enforcing` 表示已经作为阻塞门禁执行；任何阶段都不能删除目标本身。
 
-1. 根级 `AGENTS.md` 和文档索引。
-2. MVC 依赖方向静态检查。
-3. `Result<T>` 与统一错误映射。
-4. Agent 契约 fixture 和 Fake Runtime。
-5. Design Token 颜色检查。
-6. `tests/e2e` 统一目录和基础验证矩阵。
-7. Electron 最小安全基线和真实进程冒烟测试。
-8. Go sidecar 启动、健康检查、鉴权、优雅退出和崩溃重启。
+1. 根级 `AGENTS.md` 和文档索引：`bootstrap -> enforcing`。
+2. MVC 依赖方向静态检查：`bootstrap -> enforcing`。
+3. `Result<T>` 与统一错误映射：`bootstrap -> enforcing`。
+4. Agent 契约 fixture 和 Fake Runtime：`bootstrap -> enforcing`。
+5. Design Token 颜色检查：`bootstrap -> enforcing`。
+6. `tests/e2e` 集中目录和完整验证矩阵：`bootstrap -> enforcing`。
+7. Electron 安全基线和真实进程测试：`bootstrap -> enforcing`。
+8. Go sidecar 启动、健康检查、鉴权、优雅退出和崩溃重启：`bootstrap -> enforcing`。
+9. Go Agent 分层依赖静态检查：`bootstrap -> enforcing`。
 
-不等待全部规范就绪后再开始开发。上述能力优先服务于当前工作台和单 Agent 会话。
+允许按依赖关系并行建立骨架，但不允许把尚未启用的门禁描述成非目标。每个阶段结束时必须更新能力状态、验收命令和剩余风险。
 
 首个纵向切片按以下顺序实施：
 
@@ -496,10 +613,25 @@ pnpm build
 
 现有 Fastify 原型不作为目标架构的一部分。若原型中存在需要保留的用户数据，必须在切换前单独编写导出、导入和校验步骤；没有数据校验通过，就不能声称迁移无损。
 
-## 17. 完成标准
+## 17. 架构决策门
+
+决策门不是非目标，也不是可以跳过的未完成项。受影响平台在对应决策完成前不得进入生产实现或宣称能力已完成。
+
+| 决策门 | 必须回答 | 不满足时的门槛 |
+| --- | --- | --- |
+| Web 身份与多端数据 | `AuthSession` 模型、设备标识、服务端与本地数据所有权、同步冲突、删除、导出、备份和密钥轮换 | Web 或手机端不得上线同步能力 |
+| Web 多实例一致性 | 会话执行租约、Run 事件分配、任务队列和故障接管；候选至少包括 PostgreSQL 租约与 Redis 租约 | 不得宣称支持多实例部署 |
+| 可恢复流与 Run 恢复 | 稳定订阅游标、断线重连、检查点边界、重复事件处理、至少一次或至多一次语义、恢复失败收敛 | 不得把“刷新后继续接收”描述为已支持 |
+| Redis 职责 | 缓存、SSE 回放、队列、租约、限流中哪些由 Redis 承担，哪些仍由数据库承担 | 不得先接 Redis 再反推职责 |
+| 工具、Skills、MCP 与多 Agent | 领域 Schema、权限、超时、取消、重试、Artifact/Trace 与父子 Run 关系 | 不得在 Runtime 中直接塞入未建模的前端特殊分支 |
+
+每个决策门必须产出一份 `docs/architecture` 下的决策记录，包含候选方案、约束、故障语义、迁移方式、验收测试和未选方案原因。决策完成后再把结果写入本规范和 Agent 设计，不能只存在于代码或聊天记录中。
+
+## 18. 完成标准
 
 - 工程目录与职责符合本文。
 - 前端 Store、Effect、Model、View 没有反向依赖。
+- Go Agent 的 Access、Application、Core、Ports 和 Adapters 没有反向导入。
 - 外部数据在边界完成校验。
 - Model 边界使用 `Result<T>`，组件不再重复处理底层网络异常。
 - Agent 流协议有独立 fixture 和失败场景测试。

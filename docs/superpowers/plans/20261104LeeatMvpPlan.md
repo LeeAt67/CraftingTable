@@ -1,6 +1,6 @@
 # Leeat 个人工作台 MVP Implementation Plan
 
-> **状态：已取代。** 本计划中的 Fastify、Node.js SQLite、无 Agent 范围和相关实施步骤只保留为历史记录。当前设计以 [工程化设计规范](../specs/2026-11-05-leeat-engineering-design.md) 和 [Agent 设计](../specs/2026-11-05-leeat-agent-design.md) 为准，不能直接按本计划继续实施。
+> **状态：已取代。** 本计划中的 Fastify、Node.js SQLite、无 Agent 范围和相关实施步骤只保留为历史记录。当前设计以 [工程化设计规范](../specs/2026-11-05-craftingtable-engineering-design.md) 和 [Agent 设计](../specs/2026-11-05-craftingtable-agent-design.md) 为准，不能直接按本计划继续实施。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

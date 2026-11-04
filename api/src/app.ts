@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import type { AgentConfig } from "./controllers/agentController";
 import { openDatabase } from "./models/db";
 import { registerRoutes } from "./routes";
 import { fail } from "./views/jsonView";
@@ -6,13 +7,14 @@ import { fail } from "./views/jsonView";
 type Options = {
   databasePath: string;
   logger?: boolean;
+  agent?: AgentConfig;
 };
 
-export function createApp({ databasePath, logger = false }: Options) {
+export function createApp({ databasePath, logger = false, agent }: Options) {
   const app = Fastify({ logger });
   const db = openDatabase(databasePath);
 
-  registerRoutes(app, db);
+  registerRoutes(app, db, agent);
 
   app.setErrorHandler((error, _request, reply) => {
     const message = error instanceof Error ? error.message : "请求失败";

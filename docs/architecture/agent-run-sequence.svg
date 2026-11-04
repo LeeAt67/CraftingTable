@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1040" viewBox="0 0 1200 1040" data-quality-profile="standard">
+  <style>
+    text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+  </style>
+<defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#16A34A"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#9333EA"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#EA580C"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#DC2626"/>
+    </marker>
+    <marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748B"/>
+    </marker>
+  </defs>
+<rect x="0" y="0" width="1200" height="1040" fill="#FFFFFF" data-graph-role="background"/>
+<text x="48" y="42" font-size="22" font-weight="600" fill="#111827" text-anchor="start">CraftingTable Agent Run 时序</text>
+<text x="48" y="67" font-size="13" font-weight="400" fill="#6B7280" text-anchor="start">发送消息、获取会话执行槽、流式执行、持久化终态与释放槽位</text>
+<rect data-graph-role="node" data-node-id="participant-Effect" x="29" y="92" width="122" height="54" rx="8" fill="#FFFFFF" stroke="#FED7AA" stroke-width="1.5"/>
+<circle cx="48" cy="119" r="10" fill="#FFF7ED" stroke="#FED7AA"/>
+<text x="90" y="116" font-size="13" font-weight="600" fill="#EA580C" text-anchor="middle">Effect</text>
+<text x="90" y="136" font-size="10.5" font-weight="400" fill="#6B7280" text-anchor="middle">发起与收尾</text>
+<line x1="90" y1="146" x2="90" y2="984" stroke="#CBD5E1" stroke-width="1.2" stroke-dasharray="4 5" data-graph-role="decoration"/>
+<rect data-graph-role="node" data-node-id="participant-Model" x="179" y="92" width="122" height="54" rx="8" fill="#FFFFFF" stroke="#FED7AA" stroke-width="1.5"/>
+<circle cx="198" cy="119" r="10" fill="#FFF7ED" stroke="#FED7AA"/>
+<text x="240" y="116" font-size="13" font-weight="600" fill="#EA580C" text-anchor="middle">Model</text>
+<text x="240" y="136" font-size="10.5" font-weight="400" fill="#6B7280" text-anchor="middle">Transport</text>
+<line x1="240" y1="146" x2="240" y2="984" stroke="#CBD5E1" stroke-width="1.2" stroke-dasharray="4 5" data-graph-role="decoration"/>
+<rect data-graph-role="node" data-node-id="participant-HTTP" x="329" y="92" width="122" height="54" rx="8" fill="#FFFFFF" stroke="#BBF7D0" stroke-width="1.5"/>
+<circle cx="348" cy="119" r="10" fill="#F0FDF4" stroke="#BBF7D0"/>
+<text x="390" y="116" font-size="13" font-weight="600" fill="#16A34A" text-anchor="middle">HTTP</text>
+<text x="390" y="136" font-size="10.5" font-weight="400" fill="#6B7280" text-anchor="middle">API Controller</text>
+<line x1="390" y1="146" x2="390" y2="984" stroke="#CBD5E1" stroke-width="1.2" stroke-dasharray="4 5" data-graph-role="decoration"/>
+<rect data-graph-role="node" data-node-id="participant-Coordinator" x="479" y="92" width="122" height="54" rx="8" fill="#FFFFFF" stroke="#BBF7D0" stroke-width="1.5"/>
+<circle cx="498" cy="119" r="10" fill="#F0FDF4" stroke="#BBF7D0"/>
+<text x="540" y="116" font-size="13" font-weight="600" fill="#16A34A" text-anchor="middle">Coordinator</text>
+<text x="540" y="136" font-size="10.5" font-weight="400" fill="#6B7280" text-anchor="middle">获得执行槽</text>
+<line x1="540" y1="146" x2="540" y2="984" stroke="#CBD5E1" stroke-width="1.2" stroke-dasharray="4 5" data-graph-role="decoration"/>
+<rect data-graph-role="node" data-node-id="participant-Executor" x="629" y="92" width="122" height="54" rx="8" fill="#FFFFFF" stroke="#E9D5FF" stroke-width="1.5"/>
+<circle cx="648" cy="119" r="10" fill="#FAF5FF" stroke="#E9D5FF"/>
+<text x="690" y="116" font-size="13" font-weight="600" fill="#9333EA" text-anchor="middle">Executor</text>
+<text x="690" y="136" font-size="10.5" font-weight="400" fill="#6B7280" text-anchor="middle">Run 状态机</text>
+<line x1="690" y1="146" x2="690" y2="984" stroke="#CBD5E1" stroke-width="1.2" stroke-dasharray="4 5" data-graph-role="decoration"/>
+<rect data-graph-role="node" data-node-id="participant-Runtime" x="779" y="92" width="122" height="54" rx="8" fill="#FFFFFF" stroke="#E9D5FF" stroke-width="1.5"/>
+<circle cx="798" cy="119" r="10" fill="#FAF5FF" stroke="#E9D5FF"/>
+<text x="840" y="116" font-size="13" font-weight="600" fill="#9333EA" text-anchor="middle">Runtime</text>
+<text x="840" y="136" font-size="10.5" font-weight="400" fill="#6B7280" text-anchor="middle">单步模型调用</text>
+<line x1="840" y1="146" x2="840" y2="984" stroke="#CBD5E1" stroke-width="1.2" stroke-dasharray="4 5" data-graph-role="decoration"/>
+<rect data-graph-role="node" data-node-id="participant-Repository" x="929" y="92" width="122" height="54" rx="8" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<circle cx="948" cy="119" r="10" fill="#EFF6FF" stroke="#BFDBFE"/>
+<text x="990" y="116" font-size="13" font-weight="600" fill="#2563EB" text-anchor="middle">Repository</text>
+<text x="990" y="136" font-size="10.5" font-weight="400" fill="#6B7280" text-anchor="middle">事务持久化</text>
+<line x1="990" y1="146" x2="990" y2="984" stroke="#CBD5E1" stroke-width="1.2" stroke-dasharray="4 5" data-graph-role="decoration"/>
+<rect data-graph-role="node" data-node-id="participant-StreamView" x="1069" y="92" width="122" height="54" rx="8" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<circle cx="1088" cy="119" r="10" fill="#EFF6FF" stroke="#BFDBFE"/>
+<text x="1130" y="116" font-size="13" font-weight="600" fill="#2563EB" text-anchor="middle">StreamView</text>
+<text x="1130" y="136" font-size="10.5" font-weight="400" fill="#6B7280" text-anchor="middle">SSE 编码</text>
+<line x1="1130" y1="146" x2="1130" y2="984" stroke="#CBD5E1" stroke-width="1.2" stroke-dasharray="4 5" data-graph-role="decoration"/>
+<rect x="48" y="174" width="1104" height="216" rx="8" fill="none" stroke="#CBD5E1" stroke-width="1.2" data-graph-role="container"/>
+<rect x="62" y="191" width="124" height="22" rx="5" fill="#F8FAFC" stroke="#CBD5E1"/>
+<text x="74" y="206" font-size="11.5" font-weight="600" fill="#475569" text-anchor="start">01 接收与抢占</text>
+<rect x="48" y="408" width="1104" height="396" rx="8" fill="none" stroke="#CBD5E1" stroke-width="1.2" data-graph-role="container"/>
+<rect x="62" y="428" width="397" height="22" rx="5" fill="#F8FAFC" stroke="#CBD5E1"/>
+<text x="74" y="443" font-size="11.5" font-weight="600" fill="#475569" text-anchor="start">02 Executor 驱动 Runtime 并发布流事件</text>
+<rect x="48" y="822" width="1104" height="144" rx="8" fill="none" stroke="#CBD5E1" stroke-width="1.2" data-graph-role="container"/>
+<rect x="62" y="842" width="189" height="22" rx="5" fill="#F8FAFC" stroke="#CBD5E1"/>
+<text x="74" y="857" font-size="11.5" font-weight="600" fill="#475569" text-anchor="start">03 提交终态并释放执行槽</text>
+<path id="seq-0" data-edge-id="seq-0" data-graph-role="edge" d="M98,190 L232,190" fill="none" stroke="#EA580C" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<text x="165.0" y="183" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-0">send(sessionId, requestHash)</text>
+<path id="seq-1" data-edge-id="seq-1" data-graph-role="edge" d="M248,233 L382,233" fill="none" stroke="#EA580C" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<text x="315.0" y="226" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-1">POST message + clientRequestId</text>
+<path id="seq-2" data-edge-id="seq-2" data-graph-role="edge" d="M398,276 L532,276" fill="none" stroke="#16A34A" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<text x="465.0" y="269" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-2">acquireSessionSlot()</text>
+<path id="seq-3" data-edge-id="seq-3" data-graph-role="edge" d="M548,319 L982,319" fill="none" stroke="#16A34A" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<text x="765.0" y="312" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-3">查幂等记录 / 开启事务</text>
+<path id="seq-4" data-edge-id="seq-4" data-graph-role="edge" d="M982,362 L548,362" fill="none" stroke="#16A34A" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow-green)"/>
+<text x="765.0" y="355" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-4">existingRun 或 slotGranted</text>
+<path id="seq-5" data-edge-id="seq-5" data-graph-role="edge" d="M548,405 L682,405" fill="none" stroke="#16A34A" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<text x="615.0" y="398" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-5">start(runCtx, RunPolicy)</text>
+<path id="seq-6" data-edge-id="seq-6" data-graph-role="edge" d="M698,448 L982,448" fill="none" stroke="#2563EB" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<text x="840.0" y="441" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-6">创建 MessagePart / Run / Step</text>
+<path id="seq-7" data-edge-id="seq-7" data-graph-role="edge" d="M982,491 L698,491" fill="none" stroke="#2563EB" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow-blue)"/>
+<text x="840.0" y="484" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-7">事务提交</text>
+<path id="seq-8" data-edge-id="seq-8" data-graph-role="edge" d="M698,534 L832,534" fill="none" stroke="#9333EA" stroke-width="1.6" marker-end="url(#arrow-purple)"/>
+<text x="765.0" y="527" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-8">Runtime.Stream(runCtx)</text>
+<path id="seq-9" data-edge-id="seq-9" data-graph-role="edge" d="M848,577 L1122,577" fill="none" stroke="#9333EA" stroke-width="1.6" marker-end="url(#arrow-purple)"/>
+<text x="985.0" y="570" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-9">RunDelta / RunEvent</text>
+<path id="seq-10" data-edge-id="seq-10" data-graph-role="edge" d="M1122,620 L248,620" fill="none" stroke="#2563EB" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<text x="685.0" y="613" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-10">UI Message Stream chunks</text>
+<path id="seq-11" data-edge-id="seq-11" data-graph-role="edge" d="M232,663 L98,663" fill="none" stroke="#2563EB" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow-blue)"/>
+<text x="165.0" y="656" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-11">onStarted / onSnapshot</text>
+<path id="seq-12" data-edge-id="seq-12" data-graph-role="edge" d="M832,706 L698,706" fill="none" stroke="#9333EA" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow-purple)"/>
+<text x="765.0" y="699" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-12">finish 或 stable error</text>
+<path id="seq-13" data-edge-id="seq-13" data-graph-role="edge" d="M698,749 L982,749" fill="none" stroke="#16A34A" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<text x="840.0" y="742" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-13">终态事务：Part 正文 + Event</text>
+<path id="seq-14" data-edge-id="seq-14" data-graph-role="edge" d="M982,792 L698,792" fill="none" stroke="#16A34A" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow-green)"/>
+<text x="840.0" y="785" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-14">commit ok</text>
+<path id="seq-15" data-edge-id="seq-15" data-graph-role="edge" d="M698,835 L1122,835" fill="none" stroke="#9333EA" stroke-width="1.6" marker-end="url(#arrow-purple)"/>
+<text x="910.0" y="828" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-15">publish finish</text>
+<path id="seq-16" data-edge-id="seq-16" data-graph-role="edge" d="M1122,878 L248,878" fill="none" stroke="#2563EB" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<text x="685.0" y="871" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-16">finish / [DONE]</text>
+<path id="seq-17" data-edge-id="seq-17" data-graph-role="edge" d="M682,921 L548,921" fill="none" stroke="#DC2626" stroke-width="1.6" marker-end="url(#arrow-red)"/>
+<text x="615.0" y="914" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-17">releaseSessionSlot()</text>
+<path id="seq-18" data-edge-id="seq-18" data-graph-role="edge" d="M232,964 L98,964" fill="none" stroke="#16A34A" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow-green)"/>
+<text x="165.0" y="957" font-size="10.8" font-weight="400" fill="#111827" text-anchor="middle" data-owner="seq-18">Result&lt;AgentSendResult&gt;</text>
+<g id="legend" data-graph-role="legend">
+<line x1="64" y1="1008" x2="92" y2="1008" stroke="#EA580C" stroke-width="1.7" marker-end="url(#arrow-orange)"/>
+<text x="100" y="1012" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">请求与传输</text>
+<line x1="206" y1="1008" x2="234" y2="1008" stroke="#16A34A" stroke-width="1.7" marker-end="url(#arrow-green)"/>
+<text x="242" y="1012" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">编排与提交</text>
+<line x1="348" y1="1008" x2="376" y2="1008" stroke="#9333EA" stroke-width="1.7" marker-end="url(#arrow-purple)"/>
+<text x="384" y="1012" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">模型执行</text>
+<line x1="490" y1="1008" x2="518" y2="1008" stroke="#2563EB" stroke-width="1.7" marker-end="url(#arrow-blue)"/>
+<text x="526" y="1012" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">流式回传</text>
+<line x1="632" y1="1008" x2="660" y2="1008" stroke="#DC2626" stroke-width="1.7" marker-end="url(#arrow-red)"/>
+<text x="668" y="1012" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">释放资源</text>
+</g>
+</svg>

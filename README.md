@@ -1,38 +1,44 @@
-# Leeat
+# CraftingTable
 
-Leeat 是一个单用户个人事务工作台。当前仓库保留 React、TypeScript、Vite 原型和临时 Fastify/SQLite 实现；目标架构是 Desktop 优先、本地优先、Go 模块化单体后端和共享 React 前端。
+CraftingTable 是一个单用户个人事务工作台。当前仓库保留 React、TypeScript、Vite 原型和临时 Fastify/SQLite 实现；目标架构是 Desktop 优先、本地优先、Go 模块化单体后端和共享 React 前端。
+
+`leeat` 是当前唯一用户的标识，不作为项目名、产品名或领域模型前缀。
 
 ## 当前范围
 
 - 今日时间流和快捷待办。
 - Light / Dark 主题。
-- Agent 会话工作区的设计与后续实现。
+- Agent 会话工作区、独立会话侧栏和流式消息界面。
 - 一级导航、二级侧边栏和响应式布局。
+
+Agent 在开发模式通过服务端 `/api/v1/agent/stream` 连接 OpenAI 兼容模型；浏览器不会读取模型 API Key。测试与 E2E 固定使用 `FakeAgentModel`，以保证结果可重复。
 
 相关文档：
 
 - [术语表](docs/glossary.md)
-- [工程化设计规范](docs/superpowers/specs/2026-11-05-leeat-engineering-design.md)
-- [Agent 设计](docs/superpowers/specs/2026-11-05-leeat-agent-design.md)
-- [个人工作台 MVP 设计规范](docs/superpowers/specs/2026-11-04-leeat-personal-workbench-design.md)
+- [工程化设计规范](docs/superpowers/specs/2026-11-05-craftingtable-engineering-design.md)
+- [Agent 设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-design.md)
+- [Agent 架构图](docs/architecture/README.md)
+- [早期个人工作台设计（已取代）](docs/superpowers/specs/2026-11-04-leeat-personal-workbench-design.md)
 - [旧 Agent 工作区设计（已取代）](docs/superpowers/specs/20261104LeeatAgentWorkspaceDesign.md)
 
-## 拟议设计基线
+## 设计基线
 
-两份核心设计目前状态为“待评审”，确认后再作为实施基线。
+两份核心设计状态为“已确认”，实施状态为“分阶段落地”。规范始终保留最高目标；阶段划分只决定交付顺序，不降低契约、安全、恢复和验收标准。
 
 - 平台顺序：Desktop -> Web -> 手机。
 - 前端：React、TypeScript、Vite、ShadcnUI、Zustand、MVC。
-- 后端：Go 模块化单体，本地版本使用 SQLite，Web 存储适配后续决定。
+- 后端：Go 模块化单体，Desktop 使用 SQLite，Web 存储和横向扩展方案在进入 Web 实施前通过架构决策记录确定。
 - Agent：单 Agent 起步，预留工具、Skills、MCP、多 Agent 和评测扩展点。
 - 前端 Model 边界返回 `Result<T>`，Zustand 是业务状态唯一事实源。
 - 产品行为、API、契约和桌面验收测试统一位于 `tests/e2e`。
+- Web 身份、多端同步、多实例租约、可恢复流和 Redis 职责必须在对应架构决策门完成后才能进入生产实现。
 
 ## 后续计划：Agent Run 恢复与 Redis
 
-状态：当前 MVP 采用中断后手动重试，长期恢复策略待决策。
+状态：当前实施阶段采用中断后手动重试。可恢复流、跨进程恢复和 Redis 职责必须完成方案对比后再进入生产实现。
 
-当前 MVP 的边界：
+当前实施阶段的执行边界：
 
 - 浏览器断开不会自动终止服务端正在执行的 Run。
 - 服务端进程重启后，遗留的 `running` 或 `queued` Run 标记为 `interrupted`。
@@ -52,7 +58,7 @@ Redis 是后续确定要接入的基础设施，但不在此刻预设职责和�
 
 状态：已规划，暂不实施。
 
-Agent 能力评测将作为独立项目推进，项目名暂定为 `leeat-agent-eval`。评测平台需要支持 SWE-bench、个人 Agent 场景、Skills、MCP、安全评测和多 Agent 编排评测。
+Agent 能力评测将作为独立项目推进，项目名暂定为 `craftingtable-agent-eval`。评测平台需要支持 SWE-bench、个人 Agent 场景、Skills、MCP、安全评测和多 Agent 编排评测。
 
 评测平台独立立项的原因：
 
@@ -90,9 +96,9 @@ Agent 能力评测将作为独立项目推进，项目名暂定为 `leeat-agent-
 
 1. 完成并稳定当前工作台和单 Agent 会话能力。
 2. 工作台增加无头 Agent Run、Trace 和 Artifact 契约。
-3. 新建 `leeat-agent-eval`。
+3. 新建 `craftingtable-agent-eval`。
 4. 首先接入 SWE-bench 官方 Harness。
-5. 接入 Leeat 个人事务 Agent 和内部回归数据集。
+5. 接入 CraftingTable 个人事务 Agent 和内部回归数据集。
 6. 增加 Skills、MCP、安全和多 Agent 编排评测。
 7. 最后建设评测 Web UI、实验比较和排行榜。
 
@@ -101,7 +107,14 @@ Agent 能力评测将作为独立项目推进，项目名暂定为 `leeat-agent-
 ## 开发命令
 
 ```text
+Copy-Item .env.example .env.local
+# 在 .env.local 中填写模型配置
 pnpm dev
 pnpm typecheck
+pnpm test
 pnpm test:e2e
 ```
+
+`.env.local` 已被 Git 忽略，`.env.example` 只保留非敏感默认值。开发模式默认通过临时 Fastify 服务调用真实模型；需要无网络调试时，可在本地环境显式设置 `VITE_AGENT_SOURCE=fake`。
+
+当前 Agent 会话和消息仍保存在浏览器进程内，刷新页面不会恢复。Go sidecar、SQLite 会话持久化、Electron IPC、身份系统和生产级流恢复仍属于后续实施阶段。

@@ -1,13 +1,13 @@
 # Leeat 个人工作台 MVP 设计规范
 
 日期：2026-11-04  
-状态：已确认（仅视觉与产品 MVP）；技术章节已取代
+状态：已取代（仅保留早期视觉与产品背景）
 视觉基线：当前 HTML 原型  
 架构：MVC  
-范围：MVP
+范围：历史原型
 术语基线：[Leeat 术语表](../../glossary.md)
 
-> **技术实现说明**：本文保留工作台产品范围和 UI 背景。Fastify、Node.js SQLite 等技术内容已由 [Leeat 工程化设计规范](./2026-11-05-leeat-engineering-design.md) 和 [Leeat Agent 设计](./2026-11-05-leeat-agent-design.md) 取代。
+> **技术实现说明**：本文保留工作台产品范围和 UI 背景。Fastify、Node.js SQLite 等技术内容已由 [CraftingTable 工程化设计规范](./2026-11-05-craftingtable-engineering-design.md) 和 [CraftingTable Agent 设计](./2026-11-05-craftingtable-agent-design.md) 取代。
 
 ## 1. 产品定义
 

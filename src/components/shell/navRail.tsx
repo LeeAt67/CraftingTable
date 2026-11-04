@@ -1,4 +1,4 @@
-import { Home, Moon, Settings, Sun } from "lucide-react";
+import { Bot, Home, Moon, Settings, Sun } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/components/utils";
 import { useThemeEffect } from "@/controllers/effects/useThemeEffect";
@@ -26,6 +26,18 @@ export function NavRail() {
           }
         >
           <Home aria-hidden="true" size={18} />
+        </NavLink>
+        <NavLink
+          to="/agent"
+          aria-label="Agent"
+          className={({ isActive }) =>
+            cn(
+              "grid size-9 place-items-center rounded-md text-textSecondary transition-colors hover:bg-surfaceSubtle hover:text-textPrimary",
+              isActive && "bg-brandSoft text-brand",
+            )
+          }
+        >
+          <Bot aria-hidden="true" size={18} />
         </NavLink>
       </nav>
       <NavLink

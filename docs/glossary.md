@@ -1,28 +1,29 @@
-# Leeat 术语表
+# CraftingTable 术语表
 
 日期：2026-11-05
-状态：基线
+状态：已确认
 适用范围：产品文档、设计规范、数据模型、接口和前端代码
 
-本文统一 Leeat 的业务词、流式协议词和 MVC 架构词。后续文档与本表冲突时，先修订本表，再同步其他文档和代码。
+本文统一 CraftingTable 的业务词、流式协议词和 MVC 架构词。后续文档与本表冲突时，先修订本表，再同步其他文档和代码。
 
 ## 1. 使用规则
 
 - 产品界面可以用中文，代码类型和字段统一使用英文名。
+- 项目名和产品名统一使用 `CraftingTable`；`leeat` 只表示当前用户身份，不用作类型、环境变量或领域对象前缀。
 - `Agent 会话`统一使用 `AgentSession`，不使用单独的 `Session`。
 - 用户登录会话统一使用 `AuthSession`，不使用单独的 `Session`。
-- `Thread`不作为本项目领域词；对话统一使用 `AgentSession`。
-- MVC 的 `Model`与语言模型分别写作`MVC Model`和`LLM Model`。
+- `Thread` 不作为本项目领域词；对话统一使用 `AgentSession`。
+- MVC 的 `Model` 与语言模型分别写作 `MVC Model` 和 `LLM Model`。
 - 交流中不使用含义不清的 `Service`；应明确为 MVC Model、Effect、API 或具体外部服务。
-- 协议事件名必须带协议归属。Leeat 自定义事件不能被称为 OpenAI 事件或 AI SDK 事件。
+- 协议事件名必须带协议归属。CraftingTable 自定义事件不能被称为 OpenAI 事件或 AI SDK 事件。
 
 ## 2. 业务对象
 
 | 中文 | 代码名 | 定义 |
 | --- | --- | --- |
-| Agent | `Agent` | Leeat 中的单个个人工作助手。当前阶段只有一个 Agent，不包含多 Agent。 |
+| Agent | `Agent` | CraftingTable 中的单个个人工作助手。当前阶段只有一个 Agent，不包含多 Agent。 |
 | Agent 会话 | `AgentSession` | 一次连续对话，包含标题、创建时间、消息列表和会话状态。 |
-| 身份会话 | `AuthSession` | 用户登录状态。当前 MVP 未实现账号，但保留这个词用于区分 Agent 会话。 |
+| 身份会话 | `AuthSession` | 用户登录状态。当前实施阶段未实现账号，但保留这个词用于区分 Agent 会话。 |
 | 当前会话 | `activeSession` | 当前在 Agent 工作区展示的 `AgentSession`。 |
 | 会话列表 | `sessionList` | 二级侧边栏展示的 `AgentSession` 集合。 |
 | 消息 | `AgentMessage` | Agent 会话中的一条完整消息，例如一条用户消息或一条助手消息。 |
@@ -30,17 +31,18 @@
 | 助手消息 | `assistantMessage` | `role` 为 `assistant` 的 `AgentMessage`。 |
 | 消息角色 | `AgentMessageRole` | 消息发送方，取值为 `user` 或 `assistant`。 |
 | 消息状态 | `AgentMessageStatus` | 消息状态，取值为 `streaming`、`complete`、`cancelled`、`failed` 或 `interrupted`。 |
-| 内容片段 | `AgentMessagePart` | 消息中的一块内容。用户消息片段没有 `runId`，助手生成片段必须带 `runId`；当前只有文本。 |
+| 内容片段 | `AgentMessagePart` | 消息中可展示内容的持久化来源。用户消息片段没有 `runId`，助手生成片段必须带 `runId`；当前只有文本。 |
 | 片段状态 | `AgentMessagePartStatus` | 片段状态，取值为 `streaming`、`complete`、`cancelled`、`failed` 或 `interrupted`。 |
 | 文本片段 | `AgentTextPart` | `type` 为 `text` 的 `AgentMessagePart`。 |
 | Agent 执行 | `AgentRun` | 一条助手消息的一次生成尝试，包含状态、模型和重试关系。 |
 | 触发用户消息 | `userMessageId` | 触发一次 `AgentRun` 的用户消息标识；重试不能靠数组位置推断来源。 |
 | Agent 步骤 | `AgentStep` | Run 内一个有边界的执行步骤。当前只有模型步骤，后续可扩展工具和 MCP。 |
+| Run 策略 | `RunPolicy` | 约束 Run 的步数、时长、空闲超时、连续失败次数和未来工具调用上限；策略版本随 Run 保存。 |
 | 生命周期事件 | `RunEvent` | 有业务语义并需要持久化的 Run 事件。 |
 | 流增量 | `RunDelta` | 只用于当前流链路展示的文本或 UI 增量，不逐条持久化。 |
 | 当前 Run | `activeRunId` | 助手消息当前展示的 Run。重试时保留旧 Run，但只显示新 Run 的片段。 |
 | 运行中会话 | `activeRun` | 会话详情中正在执行或刚结束、需要恢复状态的 Run 摘要。 |
-| 前端活动流 | `liveRun` | 当前前端正在接收的 Run；MVP 同时最多一个，以 `sessionId + runId` 关联。 |
+| 前端活动流 | `liveRun` | 当前前端正在接收的 Run；当前阶段同时最多一个，以 `sessionId + runId` 关联。 |
 | 客户端请求标识 | `clientRequestId` | 写请求用于幂等和重试去重的客户端生成标识。 |
 | 持久化数据 | `persistedData` | 保存在服务端数据库中的会话和消息。 |
 | 运行时状态 | `runtimeState` | 当前页面内存中的状态，例如正在生成、已取消或发生错误。 |
@@ -59,7 +61,7 @@
 | 已取消 | `cancelled` | 用户主动停止生成，已接收内容可以保留。 |
 | 失败 | `error` | 本次生成失败，已接收的部分内容仍可以保留。 |
 
-`sendPhase`只描述发送流程，建议取值为`idle`、`submitting`、`streaming`和`error`。单条消息的最终状态使用`AgentMessageStatus`，取值为`streaming`、`complete`、`cancelled`、`failed`和`interrupted`。
+`sendPhase` 只描述发送流程，建议取值为 `idle`、`submitting`、`streaming` 和 `error`。单条消息的最终状态使用 `AgentMessageStatus`，取值为 `streaming`、`complete`、`cancelled`、`failed` 和 `interrupted`。`complete` 是消息完成状态，Run 和 Step 的对应成功状态是 `completed`，两者不能混用。
 
 ## 4. 流式数据
 
@@ -88,15 +90,16 @@
 | 协议 | `protocol` | 前后端约定的数据格式、字段含义、事件顺序和结束规则。 |
 | 网络格式 | `wireFormat` | 数据真正通过网络传输时的格式，例如 SSE 文本。 |
 | Schema | `schema` | 协议和数据的结构定义；前端可使用 TypeScript 类型和 Zod，后端使用对应语言类型与校验。 |
-| 生命周期事件 `RunEvent` | `runEvent` | Leeat 服务端定义、需要持久化的 Agent 执行事件。 |
-| 流增量定义 | `RunDelta` | Leeat 服务端产生、只用于当前流链路的临时增量。 |
+| 生命周期事件 `RunEvent` | `runEvent` | CraftingTable 服务端定义、需要持久化的 Agent 执行事件。 |
+| 流增量定义 | `RunDelta` | CraftingTable 服务端产生、只用于当前流链路的临时增量。 |
 | AI SDK 协议读取 | `readUIMessageStream` | 将 AI SDK UI 消息块转换为连续`UIMessage`快照。 |
-| 协议适配器 | `AgentStreamAdapter` | 把`UIMessage`快照转换为 Leeat 领域消息和片段。 |
+| 协议适配器 | `AgentStreamAdapter` | 把 `UIMessage` 快照转换为 CraftingTable 领域消息和片段。 |
+| UI 消息元数据 | `CraftingTableUIMessageMetadata` | `start`、`finish` 等 chunk 中的 CraftingTable 关联数据，包含 `sessionId`、`runId`、`userMessageId` 和终态。 |
 | 消息归并器 | `AgentMessageReducer` | 根据流事件更新助手消息和内容片段。 |
 | 客户端传输器 | `DefaultChatTransport` | AI SDK 的客户端 HTTP Transport，发送 Agent 请求并返回 UI 消息流。 |
 | 瞬态数据块 | `transient data chunk` | `transient: true` 的 `data-*` 块，只用于当前流传递结构化状态，不加入消息历史。 |
 | 桌面传输桥 | `AgentTransportBridge` | preload 暴露的窄范围 Agent 请求桥；主进程持有 sidecar 地址和 Token。 |
-| 适配器 | `adapter` | 把第三方协议转换为 Leeat 领域结构的组件。 |
+| 适配器 | `adapter` | 把第三方协议转换为 CraftingTable 领域结构的组件。 |
 | 事件顺序 | `eventOrder` | 协议规定的事件先后关系，例如开始、增量、结束。 |
 | 终止事件 | `terminalEvent` | 表示本次生成结束的事件，正常结束和失败都只能出现一个终止事件。 |
 
@@ -138,8 +141,8 @@ finish
 | `choices[].delta.content` | OpenAI Chat Completions | 供应商原始模型流。 |
 | `response.output_text.delta` | OpenAI Responses API | Responses API的文本增量事件。 |
 | `UIMessageChunk` | AI SDK | 前端 UI 消息流协议单元。 |
-| `RunEvent` | Leeat | 服务端持久化的 Agent 生命周期事件。 |
-| `RunDelta` | Leeat | 仅存在于当前流链路的临时增量。 |
+| `RunEvent` | CraftingTable | 服务端持久化的 Agent 生命周期事件。 |
+| `RunDelta` | CraftingTable | 仅存在于当前流链路的临时增量。 |
 
 数据链路应保持为：
 
@@ -147,7 +150,7 @@ finish
 LLM Token
   -> LLM Model 原始流
   -> Go Provider Adapter
-  -> Leeat RunEvent / RunDelta
+  -> CraftingTable RunEvent / RunDelta
   -> AI SDK UI Message Stream Encoder
   -> DefaultChatTransport + readUIMessageStream
   -> AgentStreamAdapter
@@ -183,16 +186,24 @@ LLM Token
 | Action | `action` | Store 提供的同步状态修改函数。 |
 | Selector | `selector` | 从 Store 中选择派生状态的函数。 |
 | 取消控制器 | `AbortController` | 浏览器取消机制，用于停止请求和流读取。 |
-| Agent 运行时 | `AgentRuntime` | 接收 RunInput、调用模型并输出领域事件的 Go 执行适配层，不访问数据库。 |
+| Agent 运行时 | `AgentRuntime` | 单次供应商调用的执行适配层，接收已验证的 RunInput 并输出领域事件；它不是完整 Agent Loop，也不访问数据库。 |
 | Agent 执行器 | `AgentExecutor` | 使用 run-scoped context 执行 Run、累计增量、提交结果并发布 Live Event 的组件。 |
+| Run 策略 | `RunPolicy` | 定义 `maxSteps`、`maxDuration`、`idleTimeout`、`maxConsecutiveFailures` 和未来 `maxToolCalls` 的可版本化限制。 |
 | Run 协调器 | `RunCoordinator` | 管理活动 Run、会话锁、取消函数和 run-scoped context 的组件。 |
+| 体验层 | `Experience Layer` | React Renderer 中的 View、Effect、Model 和 Store，只通过接入层访问服务端能力。 |
+| 接入层 | `Access Layer` | Go 的 HTTP Controller、SSE Stream View 和请求协议适配，不实现 Agent Loop 或持久化事务。 |
+| Agent 应用层 | `Agent Application Layer` | 会话发送、取消、重试、执行槽、幂等和 Run 协调等用例边界。 |
+| Agent 核心层 | `Agent Core Layer` | AgentExecutor、Run/Step 状态机、RunPolicy、上下文组装和执行终态收敛。 |
+| 适配器与基础设施层 | `Adapters / Infrastructure Layer` | 实现 Runtime、Repository、Clock、日志和 Telemetry 端口的具体技术适配。 |
+| 端口 | `Port` | 由 Application 或 Core 需要的一方定义的抽象，具体 Adapter 向内实现，不反向依赖业务核心。 |
+| 组合根 | `composition root` | 仅在进程启动时创建具体 Adapter 并注入 Port 的位置，默认位于 `server/cmd/craftingtabled`。 |
 
 命名建议：
 
 - `AgentModel`：Agent API 和流协议适配。
 - `AgentStore`：Agent 会话、消息和状态。
 - `AgentEffect`：Agent 异步流程。
-- `AgentStreamAdapter`：AI SDK `UIMessage`到 Leeat 领域消息的转换。
+- `AgentStreamAdapter`：AI SDK `UIMessage` 到 CraftingTable 领域消息的转换。
 - `AgentMessageReducer`：事件到消息状态的归并。
 - `AgentRuntime`：Go 服务端执行边界。
 
@@ -208,4 +219,6 @@ LLM Token
 | Chunk | `UIMessageChunk`、`networkChunk`或具体领域类型 |
 | Event | `RunEvent`、`sseEvent`或`UIMessageChunk` |
 | Stream | `SSE`、`ReadableStream`或具体协议流 |
-| AI 事件 | 明确写 OpenAI、AI SDK 或 Leeat |
+| AI 事件 | 明确写 OpenAI、AI SDK 或 CraftingTable |
+| Layer | 明确写 `Experience Layer`、`Access Layer`、`Agent Application Layer`、`Agent Core Layer`或`Adapters / Infrastructure Layer` |
+| Adapter | 明确写 `Provider Adapter`、`Repository Adapter`或具体外部集成 Adapter |

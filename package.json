@@ -1,5 +1,5 @@
 {
-  "name": "leeat",
+  "name": "craftingtable",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently -k \"pnpm dev:api\" \"pnpm dev:web\"",
     "dev:web": "vite",
-    "dev:api": "tsx watch api/src/server.ts",
+    "dev:api": "node --env-file-if-exists=.env.local --import tsx --watch api/src/server.ts",
     "e2e:api": "node --env-file=.env.e2e --import tsx api/e2eServer.ts",
     "e2e:web": "vite build --mode e2e && vite preview --mode e2e --host 127.0.0.1 --port 4174",
     "build": "tsc --noEmit && vite build",

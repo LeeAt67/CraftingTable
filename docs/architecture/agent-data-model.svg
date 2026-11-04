@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="940" viewBox="0 0 1200 940" data-quality-profile="standard">
+  <style>
+    text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+  </style>
+<defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#16A34A"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#9333EA"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#EA580C"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#DC2626"/>
+    </marker>
+    <marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748B"/>
+    </marker>
+  </defs>
+<rect x="0" y="0" width="1200" height="940" fill="#FFFFFF" data-graph-role="background"/>
+<text x="48" y="42" font-size="22" font-weight="600" fill="#111827" text-anchor="start">CraftingTable Agent 数据模型</text>
+<text x="48" y="67" font-size="13" font-weight="400" fill="#6B7280" text-anchor="start">Part 是可展示正文的唯一持久化来源；RunEvent 只记录语义生命周期</text>
+<rect id="消息与展示片段" x="40" y="92" width="1120" height="198" rx="12" fill="#EFF6FF" fill-opacity="0.32" stroke="#BFDBFE" stroke-width="1.25" data-graph-role="container"/>
+<text x="58" y="116" font-size="13" font-weight="600" fill="#2563EB" text-anchor="start">消息与展示片段</text>
+<line x1="56" y1="128" x2="1144" y2="128" stroke="#BFDBFE" stroke-width="1"/>
+<rect id="执行与生命周期" x="40" y="324" width="1120" height="214" rx="12" fill="#FAF5FF" fill-opacity="0.32" stroke="#E9D5FF" stroke-width="1.25" data-graph-role="container"/>
+<text x="58" y="348" font-size="13" font-weight="600" fill="#9333EA" text-anchor="start">执行与生命周期</text>
+<line x1="56" y1="360" x2="1144" y2="360" stroke="#E9D5FF" stroke-width="1"/>
+<rect id="幂等、事件与未来 Artifact" x="40" y="572" width="1120" height="210" rx="12" fill="#F0FDF4" fill-opacity="0.32" stroke="#BBF7D0" stroke-width="1.25" data-graph-role="container"/>
+<text x="58" y="596" font-size="13" font-weight="600" fill="#16A34A" text-anchor="start">幂等、事件与未来 Artifact</text>
+<line x1="56" y1="608" x2="1144" y2="608" stroke="#BBF7D0" stroke-width="1"/>
+<g id="g-session">
+<rect id="session" data-node-id="session" data-graph-role="node" x="72" y="134" width="250" height="132" rx="8" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="82" y="146" width="26" height="26" rx="6" fill="#EFF6FF" stroke="#BFDBFE"/>
+<text x="95" y="164" font-size="11" font-weight="600" fill="#2563EB" text-anchor="middle">S</text>
+<text x="120" y="163" font-size="14" font-weight="600" fill="#111827" text-anchor="start">AgentSession</text>
+<text x="90" y="185" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">id (PK) · title</text>
+<text x="90" y="203" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">createdAt · updatedAt</text>
+</g>
+<g id="g-message">
+<rect id="message" data-node-id="message" data-graph-role="node" x="380" y="134" width="278" height="132" rx="8" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="390" y="146" width="26" height="26" rx="6" fill="#EFF6FF" stroke="#BFDBFE"/>
+<text x="403" y="164" font-size="11" font-weight="600" fill="#2563EB" text-anchor="middle">M</text>
+<text x="428" y="163" font-size="14" font-weight="600" fill="#111827" text-anchor="start">AgentMessage</text>
+<text x="398" y="185" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">id (PK) · sessionId (FK)</text>
+<text x="398" y="203" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">seq · role · status</text>
+</g>
+<g id="g-part">
+<rect id="part" data-node-id="part" data-graph-role="node" x="738" y="134" width="330" height="132" rx="8" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="748" y="146" width="26" height="26" rx="6" fill="#EFF6FF" stroke="#BFDBFE"/>
+<text x="761" y="164" font-size="11" font-weight="600" fill="#2563EB" text-anchor="middle">P</text>
+<text x="786" y="163" font-size="14" font-weight="600" fill="#111827" text-anchor="start">AgentMessagePart</text>
+<text x="756" y="185" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">id (PK) · messageId (FK) · runId</text>
+<text x="756" y="203" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">index · type · status</text>
+<text x="756" y="221" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">content: text</text>
+</g>
+<g id="g-idempotency">
+<rect id="idempotency" data-node-id="idempotency" data-graph-role="node" x="72" y="374" width="250" height="132" rx="8" fill="#FFFFFF" stroke="#BBF7D0" stroke-width="1.5"/>
+<rect x="82" y="386" width="26" height="26" rx="6" fill="#F0FDF4" stroke="#BBF7D0"/>
+<text x="95" y="404" font-size="11" font-weight="600" fill="#16A34A" text-anchor="middle">I</text>
+<text x="120" y="403" font-size="14" font-weight="600" fill="#111827" text-anchor="start">IdempotencyKey</text>
+<text x="90" y="425" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">clientRequestId (PK)</text>
+<text x="90" y="443" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">requestHash · runId</text>
+<text x="90" y="461" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">status</text>
+</g>
+<g id="g-run">
+<rect id="run" data-node-id="run" data-graph-role="node" x="380" y="374" width="288" height="132" rx="8" fill="#FFFFFF" stroke="#E9D5FF" stroke-width="1.5"/>
+<rect x="390" y="386" width="26" height="26" rx="6" fill="#FAF5FF" stroke="#E9D5FF"/>
+<text x="403" y="404" font-size="11" font-weight="600" fill="#9333EA" text-anchor="middle">R</text>
+<text x="428" y="403" font-size="14" font-weight="600" fill="#111827" text-anchor="start">AgentRun</text>
+<text x="398" y="425" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">id (PK) · sessionId (FK)</text>
+<text x="398" y="443" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">userMessageId · assistantMessageId</text>
+<text x="398" y="461" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">status · policyVersion</text>
+</g>
+<g id="g-step">
+<rect id="step" data-node-id="step" data-graph-role="node" x="738" y="374" width="330" height="132" rx="8" fill="#FFFFFF" stroke="#E9D5FF" stroke-width="1.5"/>
+<rect x="748" y="386" width="26" height="26" rx="6" fill="#FAF5FF" stroke="#E9D5FF"/>
+<text x="761" y="404" font-size="11" font-weight="600" fill="#9333EA" text-anchor="middle">X</text>
+<text x="786" y="403" font-size="14" font-weight="600" fill="#111827" text-anchor="start">AgentStep</text>
+<text x="756" y="425" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">id (PK) · runId (FK) · index</text>
+<text x="756" y="443" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">kind · status</text>
+<text x="756" y="461" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">startedAt · finishedAt</text>
+</g>
+<g id="g-event">
+<rect id="event" data-node-id="event" data-graph-role="node" x="72" y="626" width="286" height="118" rx="8" fill="#FFFFFF" stroke="#BBF7D0" stroke-width="1.5"/>
+<rect x="82" y="638" width="26" height="26" rx="6" fill="#F0FDF4" stroke="#BBF7D0"/>
+<text x="95" y="656" font-size="11" font-weight="600" fill="#16A34A" text-anchor="middle">E</text>
+<text x="120" y="655" font-size="14" font-weight="600" fill="#111827" text-anchor="start">AgentRunEvent</text>
+<text x="90" y="677" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">id (PK) · runId (FK)</text>
+<text x="90" y="695" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">sequence · type · payload</text>
+</g>
+<g id="g-artifact">
+<rect id="artifact" data-node-id="artifact" data-graph-role="node" x="722" y="626" width="290" height="118" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect x="732" y="638" width="26" height="26" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+<text x="745" y="656" font-size="11" font-weight="600" fill="#64748B" text-anchor="middle">A</text>
+<text x="770" y="655" font-size="14" font-weight="600" fill="#111827" text-anchor="start">Artifact  ·  未来扩展</text>
+<text x="740" y="677" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">file / image / tool log</text>
+<text x="740" y="695" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">runId or stepId reference</text>
+</g>
+<rect x="48" y="814" width="1104" height="34" rx="7" fill="#F8FAFC" stroke="#E5E7EB"/>
+<text x="64" y="836" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">关系不变量：Session 1:N Message；Message 1:N Part；Run 1:N Step / Event；Part 的生成片段必须带 runId；用户消息 Part 不带 runId。</text>
+<path id="session-message" data-edge-id="session-message" data-graph-role="edge" d="M322,200 L380,200" fill="none" stroke="#2563EB" stroke-width="1.7" marker-end="url(#arrow-blue)"/>
+<text x="351" y="191" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="session-message">1 : N</text>
+<path id="message-part" data-edge-id="message-part" data-graph-role="edge" d="M658,200 L738,200" fill="none" stroke="#2563EB" stroke-width="1.7" marker-end="url(#arrow-blue)"/>
+<text x="698" y="191" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="message-part">1 : N</text>
+<path id="message-run" data-edge-id="message-run" data-graph-role="edge" d="M519,266 L519,320 L454,320 L454,374" fill="none" stroke="#9333EA" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-purple)"/>
+<text x="486" y="312" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="message-run">触发 / 回答</text>
+<path id="session-run" data-edge-id="session-run" data-graph-role="edge" d="M197,266 L197,312 L330,312 L330,374 L380,374" fill="none" stroke="#9333EA" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-purple)"/>
+<text x="262" y="304" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="session-run">1 : N</text>
+<path id="run-step" data-edge-id="run-step" data-graph-role="edge" d="M668,440 L738,440" fill="none" stroke="#9333EA" stroke-width="1.7" marker-end="url(#arrow-purple)"/>
+<text x="703" y="431" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="run-step">1 : N</text>
+<path id="run-part" data-edge-id="run-part" data-graph-role="edge" d="M668,392 L704,392 L704,266" fill="none" stroke="#2563EB" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-blue)"/>
+<text x="706" y="338" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="run-part">runId</text>
+<path id="run-event" data-edge-id="run-event" data-graph-role="edge" d="M454,506 L454,558 L215,558 L215,626" fill="none" stroke="#16A34A" stroke-width="1.7" marker-end="url(#arrow-green)"/>
+<text x="336" y="550" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="run-event">1 : N</text>
+<path id="idempotency-run" data-edge-id="idempotency-run" data-graph-role="edge" d="M322,440 L380,440" fill="none" stroke="#16A34A" stroke-width="1.7" marker-end="url(#arrow-green)"/>
+<text x="351" y="431" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="idempotency-run">命中 / 新建</text>
+<path id="step-artifact" data-edge-id="step-artifact" data-graph-role="edge" d="M903,506 L903,572 L866,572 L866,626" fill="none" stroke="#64748B" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-gray)"/>
+<text x="914" y="572" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="middle" data-owner="step-artifact">未来</text>
+<g id="legend" data-graph-role="legend">
+<line x1="64" y1="902" x2="92" y2="902" stroke="#2563EB" stroke-width="1.7" marker-end="url(#arrow-blue)"/>
+<text x="100" y="906" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">消息正文</text>
+<line x1="206" y1="902" x2="234" y2="902" stroke="#9333EA" stroke-width="1.7" marker-end="url(#arrow-purple)"/>
+<text x="242" y="906" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">执行结构</text>
+<line x1="348" y1="902" x2="376" y2="902" stroke="#16A34A" stroke-width="1.7" marker-end="url(#arrow-green)"/>
+<text x="384" y="906" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">事件与幂等</text>
+<line x1="490" y1="902" x2="518" y2="902" stroke="#64748B" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrow-gray)"/>
+<text x="526" y="906" font-size="11.5" font-weight="400" fill="#6B7280" text-anchor="start">未来扩展</text>
+</g>
+</svg>

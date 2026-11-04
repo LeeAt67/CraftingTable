@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
 
 const migration = readFileSync(
-  fileURLToPath(new URL("../../migrations/001Initial.sql", import.meta.url)),
+  resolve(process.cwd(), "api/migrations/001Initial.sql"),
   "utf8",
 );
 
