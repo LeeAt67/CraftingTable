@@ -1,4 +1,13 @@
 .superpowers/
+.superpowers/
 .chrome-profile/
 .chrome-mobile-profile/
 .edge-profile/
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
