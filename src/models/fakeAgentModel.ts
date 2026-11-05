@@ -20,6 +20,11 @@ type FakeAgentModelOptions = {
     input: AgentSendInput,
     history: Array<{ role: "user" | "assistant"; content: string }>,
     signal: AbortSignal,
+    runtime: {
+      assistantMessageId: string;
+      assistantPartId: string;
+      runId: string;
+    },
   ) => AsyncIterable<string>;
 };
 
@@ -241,6 +246,11 @@ export function createFakeAgentModel(
             requestInput,
             history,
             run.abortController.signal,
+            {
+              assistantMessageId: assistantMessage.id,
+              assistantPartId: assistantPart.id,
+              runId,
+            },
           )
         : defaultResponseChunks(
             userText,

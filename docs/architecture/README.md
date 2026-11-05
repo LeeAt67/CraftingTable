@@ -57,7 +57,7 @@ Bootstrap -> create Adapter -> inject Port
 1. Effect 发起发送，Model 计算请求摘要并调用 HTTP API。
 2. Coordinator 原子获取会话执行槽，并检查 `clientRequestId` 幂等记录。
 3. Executor 在独立 `runCtx` 中创建 Run、Step、Part 和初始事件。
-4. Runtime 流式输出领域事件，Stream View 将其编码为 AI SDK UI Message Stream SSE。
+4. Runtime 流式输出领域事件，Stream View 将其编码为项目维护的 UI Message Stream 兼容 SSE 子集。
 5. 终态事务先提交正文与生命周期事件，再发送 finish，最后释放会话执行槽。
 6. 浏览器断开只结束当前订阅，不取消服务端 Run；用户停止才取消 `runCtx`。
 

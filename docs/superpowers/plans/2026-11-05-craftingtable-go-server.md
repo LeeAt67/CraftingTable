@@ -8,14 +8,17 @@
 
 **Tech Stack:** Go 1.26, standard-library `net/http`, `database/sql`, `modernc.org/sqlite`, `log/slog`, and black-box integration tests under `tests/e2e/integration`.
 
-**Status:** Implemented and verified on 2026-11-05.
+**Status:** Go service migration implemented and verified on 2026-11-05. The Agent endpoint now emits a project-owned, UI Message Stream-compatible SSE subset.
 
 ## Global Constraints
 
 - API paths and JSON field names remain unchanged.
 - API success responses remain `{ "data": ... }`.
 - API failures remain `{ "error": { code, kind, message, retryable, ... } }`.
-- Agent SSE remains `delta`, `done`, and `error`.
+- Agent SSE is a project-owned subset of UI Message Stream. Follow [Agent 设计 11.1](../specs/2026-11-05-craftingtable-agent-design.md#111-协议选择与三层-pipe-through) for the current contract.
+- Treat Vercel AI SDK, `mimo-chat`, and `aisdk-go` as design and test references. Do not import their business layers or complete Agent architecture.
+- Use generic packages only for single-purpose infrastructure. `eventsource-parser` may clean SSE; project-owned Adapters must map protocol events and domain state.
+- Do not add a general-purpose frontend SSE parser or a third-party message Store.
 - Domain errors are values checked with `errors.Is` or `errors.As`; handlers never branch on error strings.
 - Every external call accepts `context.Context`.
 - Model credentials stay server-side and never enter logs, responses, source files, or frontend bundles.
@@ -124,11 +127,11 @@ The legacy `AGENT_API_BASE_URL`, `AGENT_API_KEY`, and `AGENT_MODEL` names remain
 
 - [ ] **Step 3: Parse provider SSE incrementally, including `[DONE]`, `finish_reason`, and a final event without a blank line.**
 
-- [ ] **Step 4: Normalize output to `delta`, `done`, and structured `error` events.**
+- [ ] **Step 4: Emit the project-owned UI Message Stream subset: `start`, step events, `text-*`, `finish`, structured `error`, and `[DONE]`.**
 
 - [ ] **Step 5: Keep request-context cancellation connected to the upstream request so client disconnect cancels generation.**
 
-- [ ] **Step 6: Test normal completion, final event without a blank line, finish reason, malformed JSON, and unexpected EOF.**
+- [ ] **Step 6: Test normal completion, final event without a blank line, finish reason, malformed JSON, structured errors, and unexpected EOF.**
 
 - [ ] **Step 7: Run `go test ./server/...` and `go vet ./server/...`.**
 

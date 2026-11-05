@@ -75,6 +75,9 @@
 | 消息 Chunk | `messageChunk` | 协议层面的数据单元，例如`text-delta`。它不等于网络字节块。 |
 | 增量 | `delta` | 相对上一次状态新增的部分，通常是一小段文本。 |
 | 消息快照 | `messageSnapshot` | 某一时刻一条消息的完整状态，不是新增片段。 |
+| 三层 pipe-through | `threeLayerPipeThrough` | 前端固定链路：`agentTransport.ts` 获取 HTTP 字节流，`eventsource-parser` 清理 SSE，`agentStreamProtocol.ts` 映射项目协议，`apiAgentModel.ts` 生成领域消息快照。 |
+| 协议吸收 | `protocolAbsorption` | 理解外部协议及其分层取舍后，用本项目类型、错误模型、Adapter 和测试重新实现最小必要子集，不直接引入其业务层。 |
+| 直接依赖 | `directDependency` | 职责单一、边界清晰且不拥有业务语义的通用包，例如 `eventsource-parser`、`lodash`。 |
 | 流事件 | `streamEvent` | 带明确语义的流数据，例如消息开始、文本追加、生成完成或失败。 |
 | SSE | `SSE` | Server-Sent Events，基于 HTTP 的服务端事件流。 |
 | SSE 事件 | `sseEvent` | SSE 格式中的事件，通常由`event`、`data`和空行组成。 |
@@ -93,11 +96,13 @@
 | Schema | `schema` | 协议和数据的结构定义；前端可使用 TypeScript 类型和 Zod，后端使用对应语言类型与校验。 |
 | 生命周期事件 `RunEvent` | `runEvent` | CraftingTable 服务端定义、需要持久化的 Agent 执行事件。 |
 | 流增量定义 | `RunDelta` | CraftingTable 服务端产生、只用于当前流链路的临时增量。 |
-| AI SDK 协议读取 | `readUIMessageStream` | 将 AI SDK UI 消息块转换为连续`UIMessage`快照。 |
-| 协议适配器 | `AgentStreamAdapter` | 把 `UIMessage` 快照转换为 CraftingTable 领域消息和片段。 |
-| UI 消息元数据 | `CraftingTableUIMessageMetadata` | `start`、`finish` 等 chunk 中的 CraftingTable 关联数据，包含 `sessionId`、`runId`、`userMessageId` 和终态。 |
-| 消息归并器 | `AgentMessageReducer` | 根据流事件更新助手消息和内容片段。 |
-| 客户端传输器 | `DefaultChatTransport` | AI SDK 的客户端 HTTP Transport，发送 Agent 请求并返回 UI 消息流。 |
+| 流式传输 | `agentTransport.ts` | CraftingTable 自有 HTTP Transport，负责请求映射、非 2xx 错误 envelope 和平台 fetch 注入。 |
+| SSE 清理 | `eventsource-parser` | 直接依赖的通用包，只负责把 SSE 字节流清理为事件，不解释 Agent 业务语义。 |
+| 协议子集 Adapter | `agentStreamProtocol.ts` | 把项目需要的 UI Message Stream 子集映射为 `AgentStreamEvent`，负责终止、未知事件和协议错误语义。 |
+| 领域事件 | `AgentStreamEvent` | CraftingTable 前端使用的临时领域事件，当前包括文本增量、完成和错误；它不是 Zustand 业务状态。 |
+| 领域消息适配 | `apiAgentModel.ts` | 消费 `AgentStreamEvent`，生成现有 Agent 模型需要的 `AgentMessageSnapshot`，不把第三方消息对象写入 Store。 |
+| 协议适配器 | `AgentStreamAdapter` | 在需要拆分时，把协议事件转换为 CraftingTable 领域消息和片段。 |
+| 流元数据 | `CraftingTableStreamMetadata` | `start`、`finish` 等 chunk 中的 CraftingTable 关联数据，包含 `sessionId`、`runId`、`userMessageId` 和终态。 |
 | 瞬态数据块 | `transient data chunk` | `transient: true` 的 `data-*` 块，只用于当前流传递结构化状态，不加入消息历史。 |
 | 桌面传输桥 | `AgentTransportBridge` | preload 暴露的窄范围 Agent 请求桥；主进程持有 sidecar 地址和 Token。 |
 | 适配器 | `adapter` | 把第三方协议转换为 CraftingTable 领域结构的组件。 |
@@ -106,15 +111,18 @@
 
 职责边界：
 
-- Transport 负责把数据流拿回来。
-- Parser 负责识别协议事件。
-- Reducer 负责把事件应用到消息结构。
+- `agentTransport.ts` 只负责请求、响应状态和错误 envelope。
+- `eventsource-parser` 只负责 SSE 分帧；项目不重复实现通用 SSE 清理器。
+- `agentStreamProtocol.ts` 只识别项目需要的协议子集并产出 `AgentStreamEvent`。
+- `apiAgentModel.ts` 负责领域消息和片段映射，不保存第二份长期状态。
 - Store 负责保存业务状态。
 - View 负责展示状态。
 
 ## 6. 当前流协议
 
-当前正式流协议使用 AI SDK UI Message Stream，由 Go 服务端编码为 SSE。
+当前 `/api/v1/agent/stream` 使用项目定义的 UI Message Stream 兼容子集，由 Go 服务端编码为 SSE。
+
+协议结构参考 Vercel AI SDK UI Message Stream，但编码、错误扩展、事件子集和测试由 CraftingTable 维护；不直接依赖 `ai`、`@ai-sdk/react` 或完整 Go SDK。
 
 正常顺序为：
 
@@ -133,7 +141,7 @@ finish
 
 `start` 的 `messageMetadata` 必须携带 `sessionId`、`runId` 和 `userMessageId`；`text-start` 返回稳定的 `partId`。这些 ID 是领域对象与流事件的关联键，不由前端猜测。
 
-`message-start`、`message-finish`和`AgentStreamEvent`是早期学习方案中的名称，不再作为当前正式协议。正式领域生命周期使用`RunEvent`，前端协议块使用`UIMessageChunk`。
+`message-start` 和 `message-finish` 是早期学习方案中的名称，不再作为正式协议事件。正式领域生命周期使用 `RunEvent`；前端将协议 chunk 映射为 `AgentStreamEvent`，不把第三方协议对象写入 Store。
 
 ## 7. 协议归属
 
@@ -141,7 +149,7 @@ finish
 | --- | --- | --- |
 | `choices[].delta.content` | OpenAI Chat Completions | 供应商原始模型流。 |
 | `response.output_text.delta` | OpenAI Responses API | Responses API的文本增量事件。 |
-| `UIMessageChunk` | AI SDK | 前端 UI 消息流协议单元。 |
+| UI Message Stream chunk | 参考 Vercel AI SDK | 前端 UI 消息流协议单元；CraftingTable 只实现当前需要的子集。 |
 | `RunEvent` | CraftingTable | 服务端持久化的 Agent 生命周期事件。 |
 | `RunDelta` | CraftingTable | 仅存在于当前流链路的临时增量。 |
 
@@ -152,26 +160,27 @@ LLM Token
   -> LLM Model 原始流
   -> Go Provider Adapter
   -> CraftingTable RunEvent / RunDelta
-  -> AI SDK UI Message Stream Encoder
-  -> DefaultChatTransport + readUIMessageStream
-  -> AgentStreamAdapter
+  -> Go UI Message Stream Encoder
+  -> HTTP + SSE
+  -> eventsource-parser
+  -> agentStreamProtocol.ts
+  -> apiAgentModel.ts
   -> Zustand
   -> View
 ```
 
-## 8. AI SDK 名词
+## 8. 外部项目与依赖名词
 
 | 中文 | 名称 | 定义 |
 | --- | --- | --- |
-| AI SDK | `AI SDK` | Vercel 提供的 TypeScript AI 工具包。 |
-| AI SDK 核心包 | `ai` | 框架无关的 AI SDK 包。 |
-| React 集成包 | `@ai-sdk/react` | AI SDK 的 React 集成包。 |
-| Chat Hook | `useChat` | React Hook，内部负责请求、流解析以及自己的消息和状态。 |
-| UI 消息 | `UIMessage` | AI SDK 的前端消息结构，包含角色和多个 part。 |
-| UI 消息块 | `UIMessageChunk` | AI SDK 的底层 UI 消息流事件。 |
-| 默认聊天传输器 | `DefaultChatTransport` | AI SDK 的 HTTP Transport 实现，负责请求服务端并返回`ReadableStream<UIMessageChunk>`。 |
-| UI 消息流读取器 | `readUIMessageStream` | 把`UIMessageChunk`流转换为连续`UIMessage`快照的函数。 |
-| UI 消息流协议 | `UI Message Stream` | AI SDK 的前端消息流协议，不是 OpenAI 官方协议。 |
+| AI SDK | `AI SDK` | Vercel 提供的 TypeScript AI 工具包；CraftingTable 只参考其传输、协议和测试设计。 |
+| UI 消息流协议 | `UI Message Stream` | Vercel AI SDK 定义的前端消息流协议，不是 OpenAI 官方协议；CraftingTable 输出兼容子集。 |
+| 默认聊天传输器 | `DefaultChatTransport` | AI SDK 的 HTTP Transport 实现，只作为 `agentTransport.ts` 的设计参考，不进入生产依赖。 |
+| UI 消息流读取器 | `readUIMessageStream` | AI SDK 把消息块归并为 UI 消息快照的函数，只作为协议研究参考，不进入生产依赖。 |
+| 产品链路参考 | `mimo-chat` | 参考其传输、协议 Adapter 和状态写入分离方式；不复制其目录、业务层或 Agent 编排。 |
+| Go 流实现参考 | `aisdk-go` | Go 社区对 AI SDK 流的实现，只作为协议对照；不进入生产依赖。 |
+| SSE 清理依赖 | `eventsource-parser` | 允许直接依赖的通用 SSE 解析包，由项目 Adapter 调用。 |
+| 通用工具依赖 | `lodash` | 允许直接依赖的通用数据工具库，不承载业务语义。 |
 
 ## 9. MVC 与前端架构
 
@@ -201,11 +210,12 @@ LLM Token
 
 命名建议：
 
-- `AgentModel`：Agent API 和流协议适配。
+- `AgentModel`：Agent API 和领域状态边界。
 - `AgentStore`：Agent 会话、消息和状态。
 - `AgentEffect`：Agent 异步流程。
-- `AgentStreamAdapter`：AI SDK `UIMessage` 到 CraftingTable 领域消息的转换。
-- `AgentMessageReducer`：事件到消息状态的归并。
+- `AgentTransport`：HTTP 请求和平台 fetch 适配。
+- `AgentStreamProtocol`：UI Message Stream 项目子集到 `AgentStreamEvent` 的转换。
+- `AgentStreamAdapter`：协议事件到 CraftingTable 领域消息的转换。
 - `AgentRuntime`：Go 服务端执行边界。
 
 ## 10. 歧义检查
@@ -217,9 +227,9 @@ LLM Token
 | Session | `AgentSession`或`AuthSession` |
 | Thread | `AgentSession` |
 | Model | `MVC Model`或`LLM Model` |
-| Chunk | `UIMessageChunk`、`networkChunk`或具体领域类型 |
-| Event | `RunEvent`、`sseEvent`或`UIMessageChunk` |
+| Chunk | `networkChunk`、`sseEvent`或`AgentStreamEvent` |
+| Event | `RunEvent`、`sseEvent`或`AgentStreamEvent` |
 | Stream | `SSE`、`ReadableStream`或具体协议流 |
-| AI 事件 | 明确写 OpenAI、AI SDK 或 CraftingTable |
+| AI 事件 | 明确写 OpenAI 事件、UI Message Stream chunk 或 CraftingTable 事件 |
 | Layer | 明确写 `Experience Layer`、`Access Layer`、`Agent Application Layer`、`Agent Core Layer`或`Adapters / Infrastructure Layer` |
 | Adapter | 明确写 `Provider Adapter`、`Repository Adapter`或具体外部集成 Adapter |

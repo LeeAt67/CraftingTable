@@ -35,7 +35,15 @@ func TestAgentStreamRelaysDeltasWithoutLeakingKey(t *testing.T) {
 	response, err := http.Post(
 		server.URL("/api/v1/agent/stream"),
 		"application/json",
-		strings.NewReader(`{"messages":[{"role":"user","content":"你好"}]}`),
+		strings.NewReader(`{
+			"sessionId":"session-1",
+			"clientRequestId":"request-1",
+			"userMessageId":"user-message-1",
+			"assistantMessageId":"assistant-message-1",
+			"assistantPartId":"assistant-part-1",
+			"runId":"run-1",
+			"messages":[{"role":"user","content":"你好"}]
+		}`),
 	)
 	if err != nil {
 		t.Fatalf("send agent request: %v", err)
@@ -51,9 +59,19 @@ func TestAgentStreamRelaysDeltasWithoutLeakingKey(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", response.StatusCode, text)
 	}
 	for _, expected := range []string{
-		"event: delta\ndata: {\"text\":\"你好\"}",
-		"event: delta\ndata: {\"text\":\"，Leeat\"}",
-		"event: done\ndata: {\"status\":\"completed\"}",
+		`"type":"start"`,
+		`"messageId":"assistant-message-1"`,
+		`"sessionId":"session-1"`,
+		`"runId":"run-1"`,
+		`"type":"start-step"`,
+		`"type":"text-start","id":"assistant-part-1"`,
+		`"type":"text-delta","id":"assistant-part-1","delta":"你好"`,
+		`"type":"text-delta","id":"assistant-part-1","delta":"，Leeat"`,
+		`"type":"text-end","id":"assistant-part-1"`,
+		`"type":"finish-step"`,
+		`"type":"finish"`,
+		`"status":"completed"`,
+		`data: [DONE]`,
 	} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("response missing %q:\n%s", expected, text)
@@ -90,7 +108,15 @@ func TestAgentStreamCancelsProviderWhenClientDisconnects(t *testing.T) {
 		ctx,
 		http.MethodPost,
 		server.URL("/api/v1/agent/stream"),
-		strings.NewReader(`{"messages":[{"role":"user","content":"测试断开"}]}`),
+		strings.NewReader(`{
+			"sessionId":"session-1",
+			"clientRequestId":"request-1",
+			"userMessageId":"user-message-1",
+			"assistantMessageId":"assistant-message-1",
+			"assistantPartId":"assistant-part-1",
+			"runId":"run-1",
+			"messages":[{"role":"user","content":"测试断开"}]
+		}`),
 	)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
@@ -130,6 +156,28 @@ func TestAgentStreamReturnsStableNotConfiguredError(t *testing.T) {
 	if failure.Error.Code != "AGENT_NOT_CONFIGURED" ||
 		failure.Error.Kind != "server" ||
 		failure.Error.Retryable {
+		t.Fatalf("error = %#v", failure.Error)
+	}
+}
+
+func TestAgentStreamRequiresMessageOwnershipIDs(t *testing.T) {
+	provider := startFakeProvider(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+	})
+	server := startServer(t, provider.URL+"/v1")
+
+	status, failure := requestJSON[errorEnvelope](
+		t,
+		http.MethodPost,
+		server.URL("/api/v1/agent/stream"),
+		`{"messages":[{"role":"user","content":"你好"}]}`,
+	)
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", status)
+	}
+	if failure.Error.Code != "VALIDATION_ERROR" {
 		t.Fatalf("error = %#v", failure.Error)
 	}
 }
