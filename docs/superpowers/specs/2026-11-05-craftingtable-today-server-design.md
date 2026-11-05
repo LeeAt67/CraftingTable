@@ -1,7 +1,7 @@
 # CraftingTable 今日服务端设计（非 Agent）
 
 日期：2026-11-05
-状态：设计（待评审，未进入实施）
+状态：已评审（2026-11-05 决议），进入实施计划
 范围：`A-01` 日期与时区查询、`A-02` 删除、`A-03` 时间语义、`A-06` 错误码
 关联：[非 Agent 需求提案](./2026-11-05-craftingtable-non-agent-requirements.md)、[工程化设计规范](./2026-11-05-craftingtable-engineering-design.md)、[术语表](../../glossary.md)
 排除：Agent 会话、`AgentRun`、SSE 协议、Agent 持久化与恢复
@@ -228,9 +228,15 @@ CREATE INDEX IF NOT EXISTS idx_items_deleted_at ON items(deleted_at);
 
 回滚：SQLite 使用迁移前备份文件恢复；由于迁移只新增列并规范化文本，代码回滚后旧代码仍可读取 `deleted_at` 以外的数据（旧代码不识别该列，会忽略已删除条目，需注意这一差异）。
 
-## 9. 待评审确认点
+## 9. 评审决议
 
-1. 删除后 `complete` / `update` 返回 `404` 而不是 `409`，是否接受。
-2. `restore` 是否在本轮实现（契约已定，实现可后置）。
-3. `tz` 缺省回退是否接受，还是本轮直接改为必填。
-4. 列表排序是否保持 `start_at IS NULL, start_at, created_at` 升序，不在本轮改为前端排序。
+2026-11-05 评审通过，决议如下：
+
+| 编号 | 决议 |
+| --- | --- |
+| R-1 | 已删除条目被 `update` / `complete` / `uncomplete` 访问时返回 `404 NOT_FOUND`，与"不存在"表现一致 |
+| R-2 | `restore` 本轮实现：清空 `deleted_at`，`id`、分类、完成状态不变；未删除时幂等返回当前条目 |
+| R-3 | `tz` 缺省保留回退到服务端本地时区，标注 deprecated，不改为必填 |
+| R-4 | 列表排序保持 `start_at IS NULL, start_at, created_at` 升序，前端排序改造不在本轮 |
+
+实施顺序见 [今日服务端实施计划](../plans/2026-11-05-craftingtable-today-server.md)。
