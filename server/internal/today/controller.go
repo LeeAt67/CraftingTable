@@ -35,6 +35,8 @@ func (c *Controller) Register(router *httpapi.Router) {
 	router.Handle("POST /api/v1/item/update", c.updateItem)
 	router.Handle("POST /api/v1/item/complete", c.completeItem)
 	router.Handle("POST /api/v1/item/uncomplete", c.uncompleteItem)
+	router.Handle("POST /api/v1/item/delete", c.deleteItem)
+	router.Handle("POST /api/v1/item/restore", c.restoreItem)
 }
 
 type createItemRequest struct {
@@ -58,15 +60,18 @@ type itemIDRequest struct {
 }
 
 func (c *Controller) listToday(w http.ResponseWriter, r *http.Request) {
-	now := time.Now()
-	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	end := start.AddDate(0, 0, 1)
-
-	items, err := c.repository.ListToday(
-		r.Context(),
-		start.UTC().Format(time.RFC3339Nano),
-		end.UTC().Format(time.RFC3339Nano),
+	query := r.URL.Query()
+	dayRange, message := ResolveDayRange(
+		query.Get("date"),
+		query.Get("tz"),
+		time.Now(),
 	)
+	if message != "" {
+		writeValidationError(w, r, message)
+		return
+	}
+
+	items, err := c.repository.ListToday(r.Context(), dayRange.Start, dayRange.End)
 	if err != nil {
 		c.internalError(w, r, "加载今日事务失败", err)
 		return
@@ -99,20 +104,26 @@ func (c *Controller) createItem(w http.ResponseWriter, r *http.Request) {
 		writeValidationError(w, r, "分类不能为空")
 		return
 	}
-	if message := validateTimestamp("startAt", request.StartAt); message != "" {
-		writeValidationError(w, r, message)
+	startAt, message := NormalizeTimestamp(request.StartAt)
+	if message != "" {
+		writeValidationError(w, r, "startAt "+message)
 		return
 	}
-	if message := validateTimestamp("endAt", request.EndAt); message != "" {
-		writeValidationError(w, r, message)
+	endAt, message := NormalizeTimestamp(request.EndAt)
+	if message != "" {
+		writeValidationError(w, r, "endAt "+message)
+		return
+	}
+	if problem := TimeRangeProblem(startAt, endAt); problem != "" {
+		writeValidationError(w, r, problem)
 		return
 	}
 
 	item, err := c.repository.CreateItem(r.Context(), CreateItemInput{
 		Title:      title,
 		CategoryID: request.CategoryID,
-		StartAt:    request.StartAt,
-		EndAt:      request.EndAt,
+		StartAt:    startAt,
+		EndAt:      endAt,
 	})
 	if err != nil {
 		c.writeRepositoryError(w, r, err)
@@ -149,12 +160,14 @@ func (c *Controller) updateItem(w http.ResponseWriter, r *http.Request) {
 		writeValidationError(w, r, "分类不能为空")
 		return
 	}
-	if message := validateTimestamp("startAt", request.StartAt); message != "" {
-		writeValidationError(w, r, message)
+	startAt, message := NormalizeOptionalTimestamp(request.StartAt)
+	if message != "" {
+		writeValidationError(w, r, "startAt "+message)
 		return
 	}
-	if message := validateTimestamp("endAt", request.EndAt); message != "" {
-		writeValidationError(w, r, message)
+	endAt, message := NormalizeOptionalTimestamp(request.EndAt)
+	if message != "" {
+		writeValidationError(w, r, "endAt "+message)
 		return
 	}
 
@@ -163,8 +176,8 @@ func (c *Controller) updateItem(w http.ResponseWriter, r *http.Request) {
 		Title:       request.Title,
 		Description: request.Description,
 		CategoryID:  request.CategoryID,
-		StartAt:     request.StartAt,
-		EndAt:       request.EndAt,
+		StartAt:     startAt,
+		EndAt:       endAt,
 	})
 	if err != nil {
 		c.writeRepositoryError(w, r, err)
@@ -179,6 +192,42 @@ func (c *Controller) completeItem(w http.ResponseWriter, r *http.Request) {
 
 func (c *Controller) uncompleteItem(w http.ResponseWriter, r *http.Request) {
 	c.changeCompletion(w, r, false)
+}
+
+func (c *Controller) deleteItem(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.readItemID(w, r)
+	if !ok {
+		return
+	}
+	deleted, err := c.repository.DeleteItem(r.Context(), id)
+	if err != nil {
+		c.writeRepositoryError(w, r, err)
+		return
+	}
+	httpapi.OK(w, http.StatusOK, deleted)
+}
+
+func (c *Controller) restoreItem(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.readItemID(w, r)
+	if !ok {
+		return
+	}
+	item, err := c.repository.RestoreItem(r.Context(), id)
+	if err != nil {
+		c.writeRepositoryError(w, r, err)
+		return
+	}
+	httpapi.OK(w, http.StatusOK, item)
+}
+
+func (c *Controller) readItemID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	var request itemIDRequest
+	if err := httpapi.ReadJSON(w, r, &request); err != nil ||
+		strings.TrimSpace(request.ID) == "" {
+		writeValidationError(w, r, "缺少 id")
+		return "", false
+	}
+	return strings.TrimSpace(request.ID), true
 }
 
 func (c *Controller) changeCompletion(
@@ -214,6 +263,7 @@ func (c *Controller) writeRepositoryError(
 	r *http.Request,
 	err error,
 ) {
+	var validation ValidationError
 	switch {
 	case errors.Is(err, ErrItemNotFound):
 		httpapi.Fail(w, r, http.StatusNotFound, httpapi.ErrorBody{
@@ -222,6 +272,8 @@ func (c *Controller) writeRepositoryError(
 			Message:   "事务条目不存在",
 			Retryable: false,
 		})
+	case errors.As(err, &validation):
+		writeValidationError(w, r, validation.Message)
 	case errors.Is(err, ErrInvalidItemInput):
 		writeValidationError(w, r, "参数错误")
 	default:
@@ -258,16 +310,6 @@ func validateTitle(value string) (string, string) {
 	default:
 		return title, ""
 	}
-}
-
-func validateTimestamp(field string, value *string) string {
-	if value == nil {
-		return ""
-	}
-	if _, err := time.Parse(time.RFC3339, *value); err != nil {
-		return field + " 必须是 ISO 8601 时间"
-	}
-	return ""
 }
 
 func writeValidationError(w http.ResponseWriter, r *http.Request, message string) {

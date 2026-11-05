@@ -36,6 +36,16 @@ var (
 	ErrInvalidItemInput = errors.New("invalid item input")
 )
 
+// ValidationError 是不满足领域约束的输入错误，Message 面向用户展示。
+type ValidationError struct {
+	Message string
+}
+
+// Error 返回面向用户的错误描述。
+func (e ValidationError) Error() string {
+	return e.Message
+}
+
 // Item 是工作台展示的事务条目。
 type Item struct {
 	ID          string     `json:"id"`
@@ -49,6 +59,13 @@ type Item struct {
 	CompletedAt *string    `json:"completedAt,omitempty"`
 	CreatedAt   string     `json:"createdAt"`
 	UpdatedAt   string     `json:"updatedAt"`
+}
+
+// DeletedItem 是删除接口返回的墓碑信息。
+// 重复删除返回首次形成的 DeletedAt，保证幂等。
+type DeletedItem struct {
+	ID        string `json:"id"`
+	DeletedAt string `json:"deletedAt"`
 }
 
 // Category 是事务条目的分类。
@@ -84,6 +101,8 @@ type Repository interface {
 	UpdateItem(ctx context.Context, input UpdateItemInput) (Item, error)
 	CompleteItem(ctx context.Context, id string) (Item, error)
 	UncompleteItem(ctx context.Context, id string) (Item, error)
+	DeleteItem(ctx context.Context, id string) (DeletedItem, error)
+	RestoreItem(ctx context.Context, id string) (Item, error)
 }
 
 // StatusForStart 根据开始时间决定新建任务状态。

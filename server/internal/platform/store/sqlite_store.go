@@ -64,11 +64,43 @@ func OpenSQLite(ctx context.Context, filename string) (*SQLiteStore, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if err := verifyItemTimestamps(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
 	return &SQLiteStore{db: db}, nil
+}
+
+// verifyItemTimestamps 确认迁移没有把任何时间列写成 NULL。
+// strftime 对无法解析的输入返回 NULL，这里把它视为迁移失败而不是静默丢数据。
+func verifyItemTimestamps(ctx context.Context, db *sql.DB) error {
+	for _, column := range []string{
+		"created_at",
+		"updated_at",
+		"start_at",
+		"end_at",
+		"completed_at",
+	} {
+		query := `SELECT COUNT(*) FROM items
+			WHERE ` + column + ` IS NOT NULL AND ` + column + ` <> ''
+			AND strftime('%Y-%m-%dT%H:%M:%fZ', ` + column + `) IS NULL`
+		var lossy int
+		if err := db.QueryRowContext(ctx, query).Scan(&lossy); err != nil {
+			return fmt.Errorf("verify %s: %w", column, err)
+		}
+		if lossy != 0 {
+			return fmt.Errorf(
+				"migration would lose %d unparsable %s values",
+				lossy,
+				column,
+			)
+		}
+	}
+	return nil
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -162,22 +194,25 @@ func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }
 
-// ListToday 返回指定时间区间内创建或开始的条目。
+// ListToday 返回指定 UTC 区间内开始或创建的条目，已删除条目不会返回。
 func (s *SQLiteStore) ListToday(
 	ctx context.Context,
 	startAt string,
 	endAt string,
 ) ([]today.Item, error) {
+	start := normalizedBound(startAt)
+	end := normalizedBound(endAt)
 	rows, err := s.db.QueryContext(
 		ctx,
 		selectItem+`
-WHERE (start_at >= ? AND start_at < ?)
-   OR (start_at IS NULL AND created_at >= ? AND created_at < ?)
+WHERE deleted_at IS NULL
+  AND ((start_at >= ? AND start_at < ?)
+   OR (start_at IS NULL AND created_at >= ? AND created_at < ?))
 ORDER BY start_at IS NULL, start_at, created_at`,
-		startAt,
-		endAt,
-		startAt,
-		endAt,
+		start,
+		end,
+		start,
+		end,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list today items: %w", err)
@@ -232,7 +267,12 @@ func (s *SQLiteStore) CreateItem(
 	if err != nil {
 		return today.Item{}, fmt.Errorf("create item id: %w", err)
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	startAt := normalizeTimestamp(input.StartAt)
+	endAt := normalizeTimestamp(input.EndAt)
+	if problem := today.TimeRangeProblem(startAt, endAt); problem != "" {
+		return today.Item{}, today.ValidationError{Message: problem}
+	}
+	now := today.FormatTimestamp(time.Now())
 
 	_, err = s.db.ExecContext(
 		ctx,
@@ -255,6 +295,7 @@ func (s *SQLiteStore) CreateItem(
 }
 
 // UpdateItem 更新可编辑字段并返回最新条目。
+// startAt 或 endAt 传入空字符串表示清空该时间。
 func (s *SQLiteStore) UpdateItem(
 	ctx context.Context,
 	input today.UpdateItemInput,
@@ -284,18 +325,30 @@ func (s *SQLiteStore) UpdateItem(
 	if input.EndAt != nil {
 		endAt = input.EndAt
 	}
+	if problem := today.TimeRangeProblem(startAt, endAt); problem != "" {
+		return today.Item{}, today.ValidationError{Message: problem}
+	}
+	normalizedStart := normalizeTimestamp(startAt)
+	normalizedEnd := normalizeTimestamp(endAt)
+
+	// 已完成条目改期后仍保持 done，其他条目按开始时间重算。
+	status := current.Status
+	if status != today.ItemStatusDone {
+		status = today.StatusForStart(normalizedStart)
+	}
 
 	_, err = s.db.ExecContext(
 		ctx,
 		`UPDATE items
-		 SET title = ?, description = ?, category_id = ?, start_at = ?, end_at = ?, updated_at = ?
-		 WHERE id = ?`,
+		 SET title = ?, description = ?, status = ?, category_id = ?, start_at = ?, end_at = ?, updated_at = ?
+		 WHERE id = ? AND deleted_at IS NULL`,
 		title,
 		nullableValue(description),
+		string(status),
 		nullableValue(categoryID),
-		nullableValue(startAt),
-		nullableValue(endAt),
-		time.Now().UTC().Format(time.RFC3339Nano),
+		nullableTimestamp(normalizedStart),
+		nullableTimestamp(normalizedEnd),
+		today.FormatTimestamp(time.Now()),
 		input.ID,
 	)
 	if err != nil {
@@ -312,12 +365,12 @@ func (s *SQLiteStore) CompleteItem(
 	if _, err := s.getItem(ctx, id); err != nil {
 		return today.Item{}, err
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := today.FormatTimestamp(time.Now())
 	_, err := s.db.ExecContext(
 		ctx,
 		`UPDATE items
 		 SET status = 'done', completed_at = ?, updated_at = ?
-		 WHERE id = ?`,
+		 WHERE id = ? AND deleted_at IS NULL`,
 		now,
 		now,
 		id,
@@ -342,9 +395,9 @@ func (s *SQLiteStore) UncompleteItem(
 		ctx,
 		`UPDATE items
 		 SET status = ?, completed_at = NULL, updated_at = ?
-		 WHERE id = ?`,
+		 WHERE id = ? AND deleted_at IS NULL`,
 		string(status),
-		time.Now().UTC().Format(time.RFC3339Nano),
+		today.FormatTimestamp(time.Now()),
 		id,
 	)
 	if err != nil {
@@ -353,8 +406,76 @@ func (s *SQLiteStore) UncompleteItem(
 	return s.getItem(ctx, id)
 }
 
+// DeleteItem 为条目写入删除墓碑；重复删除返回首次的 DeletedAt。
+func (s *SQLiteStore) DeleteItem(
+	ctx context.Context,
+	id string,
+) (today.DeletedItem, error) {
+	deletedAt := today.FormatTimestamp(time.Now())
+	result, err := s.db.ExecContext(
+		ctx,
+		`UPDATE items
+		 SET deleted_at = ?, updated_at = ?
+		 WHERE id = ? AND deleted_at IS NULL`,
+		deletedAt,
+		deletedAt,
+		id,
+	)
+	if err != nil {
+		return today.DeletedItem{}, fmt.Errorf("delete item: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return today.DeletedItem{}, fmt.Errorf("delete item rows: %w", err)
+	}
+	if affected == 1 {
+		return today.DeletedItem{ID: id, DeletedAt: deletedAt}, nil
+	}
+
+	// 条件更新没有命中：要么已删除（幂等返回首次墓碑），要么从未存在。
+	var existing string
+	err = s.db.QueryRowContext(
+		ctx,
+		`SELECT deleted_at FROM items WHERE id = ? AND deleted_at IS NOT NULL`,
+		id,
+	).Scan(&existing)
+	if errors.Is(err, sql.ErrNoRows) {
+		return today.DeletedItem{}, today.ErrItemNotFound
+	}
+	if err != nil {
+		return today.DeletedItem{}, fmt.Errorf("read item tombstone: %w", err)
+	}
+	return today.DeletedItem{ID: id, DeletedAt: existing}, nil
+}
+
+// RestoreItem 清除删除墓碑；未删除的条目原样返回。
+func (s *SQLiteStore) RestoreItem(
+	ctx context.Context,
+	id string,
+) (today.Item, error) {
+	result, err := s.db.ExecContext(
+		ctx,
+		`UPDATE items
+		 SET deleted_at = NULL, updated_at = ?
+		 WHERE id = ? AND deleted_at IS NOT NULL`,
+		today.FormatTimestamp(time.Now()),
+		id,
+	)
+	if err != nil {
+		return today.Item{}, fmt.Errorf("restore item: %w", err)
+	}
+	if _, err := result.RowsAffected(); err != nil {
+		return today.Item{}, fmt.Errorf("restore item rows: %w", err)
+	}
+	return s.getItem(ctx, id)
+}
+
 func (s *SQLiteStore) getItem(ctx context.Context, id string) (today.Item, error) {
-	item, err := scanItem(s.db.QueryRowContext(ctx, selectItem+" WHERE id = ?", id))
+	item, err := scanItem(s.db.QueryRowContext(
+		ctx,
+		selectItem+" WHERE id = ? AND deleted_at IS NULL",
+		id,
+	))
 	if errors.Is(err, sql.ErrNoRows) {
 		return today.Item{}, today.ErrItemNotFound
 	}
@@ -405,8 +526,36 @@ func scanItem(scanner rowScanner) (today.Item, error) {
 	return item, nil
 }
 
+// nullableValue 把 nil 写成 SQL NULL。
 func nullableValue(value *string) any {
 	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+// normalizeTimestamp 返回固定宽度 UTC 时间；nil 与空白表示没有时间。
+func normalizeTimestamp(value *string) *string {
+	normalized, _ := today.NormalizeTimestamp(value)
+	return normalized
+}
+
+// normalizedBound 把查询边界规范化为与列相同的固定宽度格式。
+func normalizedBound(value string) string {
+	normalized := value
+	if result, message := today.NormalizeTimestamp(&value); message == "" {
+		if result != nil {
+			normalized = *result
+		} else {
+			normalized = ""
+		}
+	}
+	return normalized
+}
+
+// nullableTimestamp 把空时间写成 SQL NULL，而不是空字符串。
+func nullableTimestamp(value *string) any {
+	if value == nil || strings.TrimSpace(*value) == "" {
 		return nil
 	}
 	return *value

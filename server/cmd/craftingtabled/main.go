@@ -16,6 +16,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/leeat/craftingtable/server/internal/agent/access"
 	"github.com/leeat/craftingtable/server/internal/agent/core"

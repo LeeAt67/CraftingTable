@@ -11,6 +11,12 @@ CraftingTable 是一个单用户个人事务工作台。当前仓库使用 React
 - Agent 会话工作区、独立会话侧栏和流式消息界面。
 - 一级导航、二级侧边栏和响应式布局。
 
+今日接口支持按本地日查询：`GET /api/v1/today?date=YYYY-MM-DD&tz=IANA`。`date` 缺省为 `tz` 下的今天，`tz` 缺省为服务端本地时区（deprecated）。日界按该时区的本地零点计算，夏令时切换日按真实长度（23 或 25 小时）。
+
+`items` 的时间列统一为固定宽度 UTC 文本 `YYYY-MM-DDTHH:MM:SS.sssZ`。SQLite 的 TEXT 列使用 BINARY collation，只有固定宽度才能保证字符串排序等价于时间排序；迁移 `003_item_deletion_and_time.sql` 负责把旧数据规范化，并在无法解析时拒绝启动而不是静默丢失。
+
+删除采用软删除：`POST /api/v1/item/delete` 写入 `deleted_at` 墓碑，重复删除返回首次墓碑时间戳，从未存在返回 `NOT_FOUND`。已删除条目不会再出现在列表，也不能被 `update`、`complete`、`uncomplete` 修改；`POST /api/v1/item/restore` 清除墓碑并保留原 `id`、分类与完成状态。墓碑为后续跨端增量同步预留。
+
 Agent 的 Session、Message、Part、Run 和生命周期事件保存在本地 SQLite，模型 Key 只存在于 Go 服务端。浏览器通过 `/api/v1/agent/session/*`、`/agent/message/*` 和带游标的 `/agent/run/stream` 使用 Go 服务；刷新页面后可以恢复历史，并继续订阅仍在 Go 进程内执行的 Run。前端由 `agentTransport.ts`、`eventsource-parser`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 组成三层 pipe-through。
 
 每次 Agent Run 最长执行 120 秒，Provider 连续 30 秒没有可观察输出时判定超时；SSE 每 15 秒发送一次注释心跳。Run 终态使用独立于 HTTP 请求的有限时长 context 和有限重试写入，失败时回退为 `interrupted`。SQLite 迁移由 `schema_migrations` 账本记录文件名与 SHA-256，已应用迁移的内容发生变化时拒绝启动。
