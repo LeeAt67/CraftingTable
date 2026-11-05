@@ -137,7 +137,7 @@
 
 ## 4. 数据模型与迁移
 
-### 4.1 迁移 `003_item_deletion_and_time.sql`
+### 4.1 迁移 `004_item_deletion_and_time.sql`
 
 ```sql
 ALTER TABLE items ADD COLUMN deleted_at TEXT;

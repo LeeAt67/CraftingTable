@@ -52,7 +52,7 @@
 
 ### T3 迁移 003
 
-**产出**：`server/internal/platform/store/migrations/003_item_deletion_and_time.sql`、迁移测试
+**产出**：`server/internal/platform/store/migrations/004_item_deletion_and_time.sql`、迁移测试
 
 内容按设计 4.1：新增 `deleted_at`、规范化 5 个时间列、新增索引。
 
