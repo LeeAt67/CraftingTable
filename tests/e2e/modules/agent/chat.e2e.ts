@@ -49,9 +49,9 @@ test("stops and retries a reply without duplicating the user message", async ({
   await page.getByRole("button", { name: "发送" }).click();
   await page.getByRole("button", { name: "停止" }).click();
 
-  await expect(page.getByRole("button", { name: "重试回复" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
   await expect(page.getByLabel("你的消息")).toHaveCount(1);
-  await page.getByRole("button", { name: "重试回复" }).click();
+  await page.getByRole("button", { name: "重试" }).click();
   await expect(page.getByRole("button", { name: "停止" })).toBeVisible();
   await expect(page.getByRole("button", { name: "发送" })).toBeEnabled({
     timeout: 10_000,

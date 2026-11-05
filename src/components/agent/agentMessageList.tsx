@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { AlertCircle } from "lucide-react";
 import { cn } from "@/components/utils";
 import { Button } from "@/components/ui/button";
 import { useAgentStore } from "@/controllers/stores/agentStore";
@@ -32,18 +33,35 @@ function MessageBody({
   return (
     <div className="space-y-2">
       {visibleParts.map((part) => (
-        <p
-          key={part.id}
-          className="whitespace-pre-wrap break-words text-sm leading-6"
-        >
-          {part.content.text}
-          {part.status === "streaming" && (
-            <span
+        part.type === "error" ? (
+          <div
+            key={part.id}
+            role="alert"
+            className="flex items-start gap-2 text-sm leading-6 text-destructive"
+          >
+            <AlertCircle
               aria-hidden="true"
-              className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-brand align-middle"
+              size={15}
+              className="mt-1 shrink-0"
             />
-          )}
-        </p>
+            <span className="min-w-0 break-words">
+              {part.content.error.message}
+            </span>
+          </div>
+        ) : (
+          <p
+            key={part.id}
+            className="whitespace-pre-wrap break-words text-sm leading-6"
+          >
+            {part.content.text}
+            {part.status === "streaming" && (
+              <span
+                aria-hidden="true"
+                className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-brand align-middle"
+              />
+            )}
+          </p>
+        )
       ))}
     </div>
   );
@@ -101,13 +119,19 @@ export function AgentMessageList({
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 px-4 py-5 min-[768px]:px-5 min-[768px]:py-6">
         {messages.map((message) => {
           const isUser = message.role === "user";
+          const messageParts = partsByMessageId[message.id] ?? [];
+          const hasNonRetryableError = messageParts.some(
+            (part) =>
+              part.type === "error" && !part.content.error.retryable,
+          );
           const canRetry =
             onRetry &&
             message.id === messages.at(-1)?.id &&
             message.role === "assistant" &&
             (message.status === "failed" ||
               message.status === "cancelled" ||
-              message.status === "interrupted");
+              message.status === "interrupted") &&
+            !hasNonRetryableError;
           return (
             <article
               key={message.id}
@@ -150,7 +174,7 @@ export function AgentMessageList({
               >
                 <MessageBody
                   message={message}
-                  parts={partsByMessageId[message.id] ?? []}
+                  parts={messageParts}
                 />
                 {canRetry && (
                   <Button
@@ -160,7 +184,7 @@ export function AgentMessageList({
                     onClick={onRetry}
                     className="mt-2 h-auto p-0 text-xs"
                   >
-                    重试回复
+                    重试
                   </Button>
                 )}
               </div>

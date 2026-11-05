@@ -44,7 +44,7 @@ describe("AgentStore", () => {
       useAgentStore.getState().partsByMessageId["message-1"],
     ).toHaveLength(1);
     expect(
-      useAgentStore.getState().partsByMessageId["message-1"][0].content.text,
-    ).toBe("你好");
+      useAgentStore.getState().partsByMessageId["message-1"][0],
+    ).toMatchObject({ type: "text", content: { text: "你好" } });
   });
 });

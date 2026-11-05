@@ -48,6 +48,54 @@ describe("AgentEffect", () => {
     expect(toast.error).not.toHaveBeenCalled();
   });
 
+  it("stores a provider failure as an error part on the failed agent message", async () => {
+    const failure = {
+      code: "AGENT_PROVIDER_FAILED",
+      kind: "server",
+      message: "模型服务请求失败",
+      retryable: true,
+    } satisfies AgentError;
+    const providerError = Object.assign(new Error(failure.message), {
+      agentError: failure,
+    });
+    const effect = createAgentEffect(
+      createFakeAgentModel({
+        chunkDelayMs: 0,
+        responseChunks: async function* () {
+          throw providerError;
+        },
+      }),
+      { success: () => undefined },
+    );
+    const [created] = await effect.createSession();
+    useAgentStore.getState().setActiveSession(created!.session.id);
+
+    const [, error] = await effect.sendMessage("触发模型失败");
+
+    expect(error).toEqual(failure);
+    const failedMessage =
+      useAgentStore.getState().messagesBySessionId[created!.session.id].at(-1);
+    expect(failedMessage).toMatchObject({
+      role: "assistant",
+      status: "failed",
+    });
+    expect(
+      useAgentStore.getState().partsByMessageId[failedMessage!.id],
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "error",
+          runId: failedMessage!.activeRunId,
+          status: "failed",
+          content: {
+            type: "error",
+            error: failure,
+          },
+        }),
+      ]),
+    );
+  });
+
   it("creates a session, sends a message and writes snapshots to the Store", async () => {
     const effect = createAgentEffect(
       createFakeAgentModel({ chunkDelayMs: 0 }),
@@ -234,9 +282,9 @@ describe("AgentEffect", () => {
     expect(
       useAgentStore
         .getState()
-        .partsByMessageId[failedAssistant!.id].map(
-          (part) => part.content.text,
-        ),
+        .partsByMessageId[failedAssistant!.id]
+        .filter((part) => part.type === "text")
+        .map((part) => part.content.text),
     ).toContain("重试后的回复");
   });
 });

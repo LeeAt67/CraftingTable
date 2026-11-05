@@ -154,7 +154,7 @@ Agent 页面必须支持：
 - Empty：没有会话或会话没有消息时显示空状态。
 - Ready：显示历史消息和输入区。
 - Streaming：显示增量回复和停止按钮。
-- Error：显示错误说明和重试入口。
+- Error：在失败的 Agent 消息中显示错误说明；可重试错误在同一消息内显示重试入口。
 - NotConfigured：模型环境变量缺失时显示清晰提示。
 
 ### 5.3 新建会话
@@ -685,6 +685,7 @@ createAgent({
 - `assistant` 转为 `AIMessage`。
 - 只把状态为 `complete` 的非空 Assistant 历史传给模型。
 - `failed` 和 `cancelled` 消息不作为模型上下文。
+- 消息中的 `error` 片段只用于界面展示，不转换为模型消息。
 - 可选 `AGENT_SYSTEM_PROMPT` 转为 `SystemMessage`，放在历史消息前。
 
 ### 11.4 流式调用

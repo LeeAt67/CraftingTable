@@ -19,6 +19,13 @@ function textFor(
   return (partsByMessageId[message.id] ?? [])
     .slice()
     .sort((left, right) => left.index - right.index)
+    .filter((part) => part.type === "text")
+    .filter(
+      (part) =>
+        !message.activeRunId ||
+        !part.runId ||
+        part.runId === message.activeRunId,
+    )
     .map((part) => part.content.text)
     .join("");
 }

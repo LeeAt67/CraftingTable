@@ -110,17 +110,32 @@ export type AgentTextPartContent = {
   text: string;
 };
 
-export type AgentMessagePart = {
+export type AgentErrorPartContent = {
+  type: "error";
+  error: AgentError;
+};
+
+type AgentMessagePartBase = {
   id: string;
   messageId: string;
   runId?: string;
   index: number;
-  type: "text";
   status: AgentMessagePartStatus;
-  content: AgentTextPartContent;
   createdAt: string;
   updatedAt: string;
 };
+
+export type AgentTextPart = AgentMessagePartBase & {
+  type: "text";
+  content: AgentTextPartContent;
+};
+
+export type AgentErrorPart = AgentMessagePartBase & {
+  type: "error";
+  content: AgentErrorPartContent;
+};
+
+export type AgentMessagePart = AgentTextPart | AgentErrorPart;
 
 export type AgentRunStatus =
   | "running"

@@ -31,9 +31,10 @@
 | 助手消息 | `assistantMessage` | `role` 为 `assistant` 的 `AgentMessage`。 |
 | 消息角色 | `AgentMessageRole` | 消息发送方，取值为 `user` 或 `assistant`。 |
 | 消息状态 | `AgentMessageStatus` | 消息状态，取值为 `streaming`、`complete`、`cancelled`、`failed` 或 `interrupted`。 |
-| 内容片段 | `AgentMessagePart` | 消息中可展示内容的持久化来源。用户消息片段没有 `runId`，助手生成片段必须带 `runId`；当前只有文本。 |
+| 内容片段 | `AgentMessagePart` | 消息中可展示内容的持久化来源。用户消息片段没有 `runId`，助手生成片段必须带 `runId`；当前包含文本和错误片段。 |
 | 片段状态 | `AgentMessagePartStatus` | 片段状态，取值为 `streaming`、`complete`、`cancelled`、`failed` 或 `interrupted`。 |
 | 文本片段 | `AgentTextPart` | `type` 为 `text` 的 `AgentMessagePart`。 |
+| 错误片段 | `AgentErrorPart` | `type` 为 `error` 的 `AgentMessagePart`，用于在失败的助手消息中展示结构化错误和重试入口，不参与模型上下文。 |
 | Agent 执行 | `AgentRun` | 一条助手消息的一次生成尝试，包含状态、模型和重试关系。 |
 | 触发用户消息 | `userMessageId` | 触发一次 `AgentRun` 的用户消息标识；重试不能靠数组位置推断来源。 |
 | Agent 步骤 | `AgentStep` | Run 内一个有边界的执行步骤。当前只有模型步骤，后续可扩展工具和 MCP。 |

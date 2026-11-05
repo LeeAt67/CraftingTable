@@ -91,10 +91,16 @@ function cloneMessage(message: AgentMessage): AgentMessage {
 }
 
 function clonePart(part: AgentMessagePart): AgentMessagePart {
-  return {
-    ...part,
-    content: { ...part.content },
-  };
+  if (part.type === "error") {
+    return {
+      ...part,
+      content: {
+        ...part.content,
+        error: { ...part.content.error },
+      },
+    };
+  }
+  return { ...part, content: { ...part.content } };
 }
 
 function isRetryableMessage(message: AgentMessage) {
@@ -103,6 +109,18 @@ function isRetryableMessage(message: AgentMessage) {
     (message.status === "failed" ||
       message.status === "cancelled" ||
       message.status === "interrupted")
+  );
+}
+
+function agentErrorFrom(cause: unknown): AgentError {
+  return (
+    embeddedAgentError(cause) ?? {
+      code: "AGENT_PROVIDER_FAILED",
+      kind: "server",
+      message:
+        cause instanceof Error ? cause.message : "模型响应失败",
+      retryable: true,
+    }
   );
 }
 
@@ -268,32 +286,43 @@ export function createFakeAgentModel(
     assistantMessage.updatedAt = finishedAt;
     assistantPart.status = terminalPartStatus;
     assistantPart.updatedAt = finishedAt;
+    const agentError =
+      streamFailure && terminalStatus !== "cancelled"
+        ? agentErrorFrom(streamFailure)
+        : null;
+    if (agentError) {
+      const errorPart: AgentMessagePart = {
+        id: createId(),
+        messageId: assistantMessage.id,
+        runId,
+        index: assistantPart.index + 1,
+        type: "error",
+        status: "failed",
+        content: { type: "error", error: agentError },
+        createdAt: finishedAt,
+        updatedAt: finishedAt,
+      };
+      store.partsByMessageId.set(assistantMessage.id, [
+        ...(store.partsByMessageId.get(assistantMessage.id) ?? []),
+        errorPart,
+      ]);
+    }
     run.status = terminalStatus;
     session.updatedAt = finishedAt;
     store.activeRunsBySessionId.delete(session.id);
     signal.removeEventListener("abort", abort);
+    const finalParts = (
+      store.partsByMessageId.get(assistantMessage.id) ?? []
+    )
+      .filter((part) => !part.runId || part.runId === runId)
+      .map(clonePart);
     handlers.onSnapshot({
       message: cloneMessage(assistantMessage),
-      parts: [clonePart(assistantPart)],
+      parts: finalParts,
     });
 
-    if (streamFailure && terminalStatus !== "cancelled") {
-      const agentError = embeddedAgentError(streamFailure);
-      if (agentError) {
-        return [null, agentError];
-      }
-      return [
-        null,
-        {
-          code: "AGENT_PROVIDER_FAILED",
-          kind: "server",
-          message:
-            streamFailure instanceof Error
-              ? streamFailure.message
-              : "模型响应失败",
-          retryable: true,
-        },
-      ];
+    if (agentError) {
+      return [null, agentError];
     }
     return [
       {
@@ -473,6 +502,7 @@ export function createFakeAgentModel(
       const userText = (
         store.partsByMessageId.get(userMessage.id) ?? []
       )
+        .filter((part) => part.type === "text")
         .map((part) => part.content.text)
         .join("");
       const retryHistory = buildAgentContext(

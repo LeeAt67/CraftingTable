@@ -38,7 +38,10 @@ describe("FakeAgentModel", () => {
         onStarted: () => undefined,
         onSnapshot: (snapshot) => {
           snapshots.push(
-            snapshot.parts.map((part) => part.content.text).join(""),
+            snapshot.parts
+              .filter((part) => part.type === "text")
+              .map((part) => part.content.text)
+              .join(""),
           );
         },
       },
@@ -315,6 +318,7 @@ describe("FakeAgentModel", () => {
     expect(
       detail?.messageParts
         .filter((part) => part.messageId === assistantMessageId)
+        .filter((part) => part.type === "text")
         .map((part) => part.content.text),
     ).toEqual(["重试成功"]);
   });

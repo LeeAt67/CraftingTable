@@ -371,27 +371,38 @@ type CraftingTableSendMessage = {
 `AgentMessagePart` 是消息中的一块可展示内容。
 
 ```ts
-type AgentMessagePartType = "text"
+type AgentMessagePart = AgentTextPart | AgentErrorPart
 
-type AgentMessagePart = {
+type AgentMessagePartBase = {
   id: string
   messageId: string
   runId?: string
   index: number
-  type: AgentMessagePartType
   status: "streaming" | "complete" | "cancelled" | "failed" | "interrupted"
-  content: AgentTextPartContent
   createdAt: string
   updatedAt: string
+}
+
+type AgentTextPart = AgentMessagePartBase & {
+  type: "text"
+  content: AgentTextPartContent
 }
 
 type AgentTextPartContent = {
   type: "text"
   text: string
 }
+
+type AgentErrorPart = AgentMessagePartBase & {
+  type: "error"
+  content: {
+    type: "error"
+    error: AgentError
+  }
+}
 ```
 
-当前只接受 `text`。后续可增加：
+`error` 片段只用于在失败的助手消息中展示结构化错误和重试入口，不属于模型上下文。后续可增加：
 
 - `tool-call`
 - `tool-result`
@@ -1280,6 +1291,8 @@ Provider SSE
 
 - 发送给模型的历史由完整轮次组成：一条用户消息加上该消息的一条 `complete` 助手回复。失败、取消或中断的轮次不进入后续上下文，除非用户针对同一用户消息创建重试。
 - `failed`、`cancelled` 和 `interrupted` 的旧尝试不作为模型上下文，其保留在数据库中的 Part 只用于审计和 UI。
+- 上下文组装只读取 `text` 片段；`error` 片段即使随历史消息回放，也不得进入模型消息。
+- 同一条助手消息发生重试时，只读取 `activeRunId` 对应 Run 的文本片段，旧尝试的片段不得拼入上下文。
 - 最多保留最近 20 个完整轮次，共不超过 40 条消息。
 - 输入正文总量默认上限为 20,000 个 Unicode 字符；超限时从最旧的完整对话轮次开始截断，并至少保留当前用户消息。
 - 截断时不能从一条助手消息的中间开始。
@@ -1314,7 +1327,7 @@ Provider SSE
 - Loading：侧栏和会话内容使用 Skeleton。
 - Empty：无会话或无消息时显示空状态。
 - Streaming：显示已接收文本和停止按钮。
-- Error：显示可理解错误和重试入口。
+- Error：在最后一条 Agent 消息中显示可理解错误；可重试错误在同一消息内显示重试入口，页面顶部只为无法挂到消息上的错误保留提示。
 - NotConfigured：显示模型未配置提示，不显示假回复。
 - Interrupted：显示上次生成中断和重试入口。
 

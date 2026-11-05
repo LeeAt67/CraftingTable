@@ -48,7 +48,10 @@ describe("ApiAgentModel", () => {
       {
         onStarted: () => undefined,
         onSnapshot: (snapshot) => {
-          snapshots.push(snapshot.parts[0].content.text);
+          const part = snapshot.parts[0];
+          if (part.type === "text") {
+            snapshots.push(part.content.text);
+          }
         },
       },
     );

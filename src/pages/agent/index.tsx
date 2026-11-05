@@ -22,6 +22,25 @@ export default function AgentPage() {
         state.messagesBySessionId[activeSessionId]?.length) ||
       0,
   );
+  const hasInlineFailure = useAgentStore((state) => {
+    if (!state.activeSessionId) {
+      return false;
+    }
+    const lastMessage = state.messagesBySessionId[
+      state.activeSessionId
+    ]?.at(-1);
+    return Boolean(
+      lastMessage?.role === "assistant" &&
+        lastMessage.status === "failed" &&
+        state.partsByMessageId[lastMessage.id]?.some(
+          (part) =>
+            part.type === "error" &&
+            (!lastMessage.activeRunId ||
+              !part.runId ||
+              part.runId === lastMessage.activeRunId),
+        ),
+    );
+  });
   const isCurrentSessionStreaming =
     liveRun?.sessionId === activeSessionId &&
     (sendPhase === "submitting" || sendPhase === "streaming");
@@ -56,7 +75,9 @@ export default function AgentPage() {
 
   return (
     <section className="flex h-full min-w-0 flex-col bg-surface">
-      {error && <AgentErrorBanner error={error} onRetry={retry} />}
+      {error && !hasInlineFailure && (
+        <AgentErrorBanner error={error} onRetry={retry} />
+      )}
 
       <div className="min-h-0 flex-1">
         {!activeSessionId ? (
@@ -66,7 +87,7 @@ export default function AgentPage() {
         ) : (
           <AgentMessageList
             sessionId={activeSessionId}
-            onRetry={error ? undefined : retry}
+            onRetry={retry}
           />
         )}
       </div>
