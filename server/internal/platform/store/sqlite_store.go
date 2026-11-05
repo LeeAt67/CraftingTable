@@ -5,17 +5,20 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
-	_ "embed"
+	"embed"
 	"errors"
 	"fmt"
+	"io/fs"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/leeat/craftingtable/server/internal/today"
 	_ "modernc.org/sqlite"
 )
 
-//go:embed migrations/001_initial.sql
-var initialMigration string
+//go:embed migrations/*.sql
+var migrationFiles embed.FS
 
 const selectItem = `
 SELECT
@@ -49,18 +52,44 @@ func OpenSQLite(ctx context.Context, filename string) (*SQLiteStore, error) {
 	for _, statement := range []string{
 		"PRAGMA foreign_keys = ON;",
 		"PRAGMA busy_timeout = 5000;",
-		initialMigration,
 	} {
 		if _, err := db.ExecContext(ctx, statement); err != nil {
 			_ = db.Close()
 			return nil, fmt.Errorf("initialize sqlite: %w", err)
 		}
 	}
+	if err := applyMigrations(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
 	return &SQLiteStore{db: db}, nil
+}
+
+func applyMigrations(ctx context.Context, db *sql.DB) error {
+	entries, err := fs.ReadDir(migrationFiles, "migrations")
+	if err != nil {
+		return fmt.Errorf("list migrations: %w", err)
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name() < entries[j].Name()
+	})
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+		body, err := migrationFiles.ReadFile("migrations/" + entry.Name())
+		if err != nil {
+			return fmt.Errorf("read migration %s: %w", entry.Name(), err)
+		}
+		if _, err := db.ExecContext(ctx, string(body)); err != nil {
+			return fmt.Errorf("apply migration %s: %w", entry.Name(), err)
+		}
+	}
+	return nil
 }
 
 // Close 关闭数据库连接。
