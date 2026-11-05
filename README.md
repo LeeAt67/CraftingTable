@@ -8,7 +8,7 @@ CraftingTable 是一个单用户个人事务工作台。当前仓库使用 React
 
 - 今日时间流和快捷待办。
 - Light / Dark 主题。
-- Agent 会话工作区、独立会话侧栏和流式消息界面。
+- Agent 会话工作区、独立会话侧栏、流式消息界面和可折叠的 Reasoning 展示。
 - 一级导航、二级侧边栏和响应式布局。
 
 今日接口支持按本地日查询：`GET /api/v1/today?date=YYYY-MM-DD&tz=IANA`。`date` 缺省为 `tz` 下的今天，`tz` 缺省为服务端本地时区（deprecated）。日界按该时区的本地零点计算，夏令时切换日按真实长度（23 或 25 小时）。
@@ -23,7 +23,7 @@ Agent 的 Session、Message、Part、Run 和生命周期事件保存在本地 SQ
 
 创建会话、发送消息和重试都使用持久化 `clientRequestId`。相同请求标识和相同摘要再次提交时，运行中的 Run 返回 `AGENT_SESSION_BUSY`，已终态的 Run 返回 `AGENT_REQUEST_ALREADY_PROCESSED`；相同标识对应不同内容时返回 `AGENT_REQUEST_ID_CONFLICT`。幂等重放不会重新启动或终结原 Run。
 
-自动化测试不调用真实模型。Vitest 使用可控 Fake Model，Playwright 使用持久化 Go API 和 loopback OpenAI-compatible Fake Provider，Go 集成测试同样使用 loopback Fake Provider，以保证结果可重复。
+自动化测试默认不调用真实模型。Vitest 使用可控 Fake Model，默认 Playwright 使用持久化 Go API 和 loopback OpenAI-compatible Fake Provider，Go 集成测试同样使用 loopback Fake Provider，以保证结果可重复。Reasoning 的真实链路验收通过 `pnpm test:e2e:real` 显式运行；服务端从本地 `.env.local` 读取模型配置，该测试不属于默认测试集。
 
 相关文档：
 
@@ -32,6 +32,8 @@ Agent 的 Session、Message、Part、Run 和生命周期事件保存在本地 SQ
 - [Agent 设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-design.md)
 - [Agent 持久化与恢复设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-persistence-recovery-design.md)
 - [Agent 流协议状态机设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-stream-state-machine-design.md)
+- [Agent Reasoning 展示设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-reasoning-display-design.md)
+- [Agent Reasoning 交接文档](docs/handoffs/2026-11-05-craftingtable-agent-reasoning-handoff.md)
 - [Agent 架构图](docs/architecture/README.md)
 - [非 Agent 需求提案](docs/superpowers/specs/2026-11-05-craftingtable-non-agent-requirements.md)
 - [今日服务端设计（非 Agent）](docs/superpowers/specs/2026-11-05-craftingtable-today-server-design.md)
@@ -137,6 +139,7 @@ pnpm typecheck
 pnpm test
 pnpm test:go
 pnpm test:e2e
+pnpm test:e2e:real
 pnpm build
 ```
 

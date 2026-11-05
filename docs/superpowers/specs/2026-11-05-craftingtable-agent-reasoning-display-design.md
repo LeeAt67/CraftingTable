@@ -1,6 +1,6 @@
 # CraftingTable Agent Reasoning Display Design
 
-- **Status:** Draft for review
+- **Status:** Implemented on 2026-11-05
 - **Date:** 2026-11-05
 - **Scope:** MiMo reasoning 内容的流式接收、持久化、恢复和折叠展示
 - **Depends on:** [Agent 设计](./2026-11-05-craftingtable-agent-design.md)、[持久化与恢复设计](./2026-11-05-craftingtable-agent-persistence-recovery-design.md)
