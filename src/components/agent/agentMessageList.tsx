@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import { AlertCircle } from "lucide-react";
+import { AgentReasoningPanel } from "@/components/agent/agentReasoningPanel";
 import { cn } from "@/components/utils";
 import { Button } from "@/components/ui/button";
 import { useAgentStore } from "@/controllers/stores/agentStore";
 import type {
   AgentMessage,
   AgentMessagePart,
+  AgentReasoningPart,
 } from "@/models/agentContracts";
 
 function MessageBody({
@@ -21,6 +23,12 @@ function MessageBody({
       !part.runId ||
       part.runId === message.activeRunId,
   );
+  const reasoningParts = visibleParts.filter(
+    (part): part is AgentReasoningPart => part.type === "reasoning",
+  );
+  const textStarted = visibleParts.some(
+    (part) => part.type === "text" && part.content.text.length > 0,
+  );
 
   if (visibleParts.length === 0) {
     return (
@@ -32,6 +40,13 @@ function MessageBody({
 
   return (
     <div className="space-y-2">
+      {reasoningParts.map((part) => (
+        <AgentReasoningPanel
+          key={part.id}
+          part={part}
+          textStarted={textStarted}
+        />
+      ))}
       {visibleParts.map((part) => (
         part.type === "error" ? (
           <div
@@ -48,7 +63,7 @@ function MessageBody({
               {part.content.error.message}
             </span>
           </div>
-        ) : (
+        ) : part.type === "reasoning" ? null : (
           <p
             key={part.id}
             className="whitespace-pre-wrap break-words text-sm leading-6"
@@ -67,9 +82,19 @@ function MessageBody({
   );
 }
 
-function runAnnouncement(messages: AgentMessage[]) {
-  if (messages.some((message) => message.status === "streaming")) {
-    return "Agent 正在回复";
+function runAnnouncement(
+  messages: AgentMessage[],
+  partsByMessageId: Record<string, AgentMessagePart[]>,
+) {
+  const streaming = messages.find(
+    (message) =>
+      message.role === "assistant" && message.status === "streaming",
+  );
+  if (streaming) {
+    const hasText = (partsByMessageId[streaming.id] ?? []).some(
+      (part) => part.type === "text" && part.content.text.length > 0,
+    );
+    return hasText ? "Agent 正在回复" : "Agent 正在思考";
   }
 
   let lastAssistant: AgentMessage | undefined;
@@ -101,20 +126,31 @@ export function AgentMessageList({
     (state) => state.messagesBySessionId[sessionId] ?? [],
   );
   const partsByMessageId = useAgentStore((state) => state.partsByMessageId);
+  const listRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const followTail = useRef(true);
 
   useEffect(() => {
+    if (!followTail.current) {
+      return;
+    }
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages, partsByMessageId]);
 
   return (
     <div
+      ref={listRef}
       role="log"
       aria-label="会话消息"
       className="h-full overflow-y-auto"
+      onScroll={(event) => {
+        const node = event.currentTarget;
+        followTail.current =
+          node.scrollHeight - node.scrollTop - node.clientHeight < 8;
+      }}
     >
       <p role="status" aria-atomic="true" className="sr-only">
-        {runAnnouncement(messages)}
+        {runAnnouncement(messages, partsByMessageId)}
       </p>
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 px-4 py-5 min-[768px]:px-5 min-[768px]:py-6">
         {messages.map((message) => {

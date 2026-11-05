@@ -1,11 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentMessageList } from "@/components/agent/agentMessageList";
 import {
   resetAgentStore,
   useAgentStore,
 } from "@/controllers/stores/agentStore";
-import type { AgentMessagePart } from "@/models/agentContracts";
+import type { AgentMessage, AgentMessagePart } from "@/models/agentContracts";
 
 function failedAssistantWithError(retryable: boolean) {
   const errorPart = {
@@ -174,5 +174,109 @@ describe("AgentMessageList", () => {
     expect(
       screen.queryByRole("button", { name: "重试" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("announces thinking until text content arrives", () => {
+    useAgentStore.getState().setSessionMessages(
+      "session-1",
+      [
+        {
+          id: "assistant-1",
+          sessionId: "session-1",
+          seq: 1,
+          role: "assistant",
+          status: "streaming",
+          activeRunId: "run-1",
+          createdAt: "2026-11-05T00:00:00.000Z",
+          updatedAt: "2026-11-05T00:00:00.000Z",
+        },
+      ],
+      [
+        {
+          id: "reasoning-1",
+          messageId: "assistant-1",
+          runId: "run-1",
+          index: 0,
+          type: "reasoning",
+          status: "streaming",
+          content: { type: "reasoning", text: "先分析" },
+          createdAt: "2026-11-05T00:00:00.000Z",
+          updatedAt: "2026-11-05T00:00:00.000Z",
+        },
+        {
+          id: "text-1",
+          messageId: "assistant-1",
+          runId: "run-1",
+          index: 1,
+          type: "text",
+          status: "streaming",
+          content: { type: "text", text: "" },
+          createdAt: "2026-11-05T00:00:00.000Z",
+          updatedAt: "2026-11-05T00:00:00.000Z",
+        },
+      ],
+    );
+
+    render(<AgentMessageList sessionId="session-1" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Agent 正在思考");
+    expect(screen.getByRole("button", { name: "Reasoning" })).toBeVisible();
+  });
+
+  it("only follows streamed updates while the user is near the bottom", () => {
+    const message = {
+      id: "assistant-1",
+      sessionId: "session-1",
+      seq: 1,
+      role: "assistant",
+      status: "streaming",
+      activeRunId: "run-1",
+      createdAt: "2026-11-05T00:00:00.000Z",
+      updatedAt: "2026-11-05T00:00:00.000Z",
+    } satisfies AgentMessage;
+    const textPart = (text: string): AgentMessagePart => ({
+      id: "text-1",
+      messageId: "assistant-1",
+      runId: "run-1",
+      index: 1,
+      type: "text",
+      status: "streaming",
+      content: { type: "text", text },
+      createdAt: "2026-11-05T00:00:00.000Z",
+      updatedAt: "2026-11-05T00:00:00.000Z",
+    });
+
+    act(() => {
+      useAgentStore
+        .getState()
+        .setSessionMessages("session-1", [message], [textPart("第一段")]);
+    });
+    render(<AgentMessageList sessionId="session-1" />);
+
+    const log = screen.getByRole("log", { name: "会话消息" });
+    Object.defineProperties(log, {
+      scrollHeight: { configurable: true, value: 1_000 },
+      clientHeight: { configurable: true, value: 500 },
+      scrollTop: { configurable: true, writable: true, value: 0 },
+    });
+
+    fireEvent.scroll(log);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    act(() => {
+      useAgentStore
+        .getState()
+        .setSessionMessages("session-1", [message], [textPart("第一段更新")]);
+    });
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+
+    log.scrollTop = 500;
+    fireEvent.scroll(log);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    act(() => {
+      useAgentStore
+        .getState()
+        .setSessionMessages("session-1", [message], [textPart("第一段再次更新")]);
+    });
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
   });
 });
