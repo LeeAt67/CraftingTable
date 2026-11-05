@@ -20,7 +20,9 @@
     "test:go": "go test ./server/... ./tests/e2e/integration/...",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:real": "playwright test --config=playwright.real.config.ts"
+    "test:e2e:real": "playwright test --config=playwright.real.config.ts",
+    "skills:install": "node scripts/installAgentSkills.mjs",
+    "skills:check": "node scripts/installAgentSkills.mjs --check"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

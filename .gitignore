@@ -13,3 +13,8 @@ test-results/
 *.sqlite-wal
 .env
 .env.local
+
+# skill 安装产物：唯一事实源是根目录 skills/，不要提交这些副本
+.agents/
+.claude/skills/
+.github/skills/
