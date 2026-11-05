@@ -11,6 +11,7 @@
     "dev:web": "vite",
     "dev:api": "go run ./server/cmd/craftingtabled -env-file=.env.local",
     "e2e:api": "go run ./server/cmd/craftingtabled -env-file=.env.e2e -reset-database",
+    "e2e:api:real": "node scripts/e2eRealApi.mjs",
     "e2e:web": "vite build --mode e2e && vite preview --mode e2e --host 127.0.0.1 --port 4174",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
@@ -18,7 +19,8 @@
     "test": "vitest run",
     "test:go": "go test ./server/... ./tests/e2e/integration/...",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:real": "playwright test --config=playwright.real.config.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

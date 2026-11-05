@@ -66,6 +66,9 @@ function MessageBody({
         ) : part.type === "reasoning" ? null : (
           <p
             key={part.id}
+            aria-label={
+              message.role === "assistant" ? "Agent 回复正文" : undefined
+            }
             className="whitespace-pre-wrap break-words text-sm leading-6"
           >
             {part.content.text}
