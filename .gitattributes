@@ -1,0 +1,20 @@
+# 统一使用 LF 行尾，禁止 Windows 检出时转成 CRLF。
+# 文本文件由 git 自动识别，二进制文件保持原样。
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.sqlite binary
+*.sqlite3 binary
+*.db binary
+*.zip binary
+*.gz binary
