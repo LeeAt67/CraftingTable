@@ -1,6 +1,6 @@
 # CraftingTable Agent Persistence And Recovery Design
 
-- **Status:** Proposed
+- **Status:** Implemented and verified on 2026-11-05
 - **Date:** 2026-11-05
 - **Scope:** Agent Session、Message、Part、Run 的 SQLite 持久化，以及浏览器断线和页面刷新后的流恢复
 - **Depends on:** [工程化设计规范](./2026-11-05-craftingtable-engineering-design.md)、[Agent 设计](./2026-11-05-craftingtable-agent-design.md)、[Agent Stream State Machine](./2026-11-05-craftingtable-agent-stream-state-machine-design.md)
@@ -808,4 +808,53 @@ Design Spec
   -> Status And README Update
 ```
 
-用户批准本设计和 ADR 后，才进入实施计划与生产代码修改。
+本设计和 ADR 已通过实施计划、失败测试、最小实现和浏览器验收，当前状态为已实现。
+
+## 22. 实施记录
+
+实现日期：2026-11-05。
+
+已落地的执行边界：
+
+- SQLite 保存 Session、Message、Part、Run、Step、生命周期 RunEvent 和幂等键。
+- 单进程 Run Coordinator 持有 Provider Context，HTTP 订阅断开不取消 Run。
+- 内存 Event Journal 保存当前 Run 的 UI chunks，SSE `id` 提供单调游标。
+- 页面刷新后读取 Session 详情，并从 `activeRun.lastSequence` 恢复订阅。
+- Go 进程重启时只把遗留 `running` Run 收敛为 `interrupted`，不续接原 Provider 流，也不伪造 token。
+
+主要代码：
+
+- `server/internal/platform/store/migrations/002_agent.sql`
+- `server/internal/platform/store/agent_store.go`
+- `server/internal/agent/core/coordinator.go`
+- `server/internal/agent/core/event_journal.go`
+- `server/internal/agent/access/session_controller.go`
+- `server/internal/agent/access/run_controller.go`
+- `src/models/agentTransport.ts`
+- `src/models/agentRunClient.ts`
+- `src/models/apiAgentModel.ts`
+- `src/controllers/effects/useAgentEffect.ts`
+
+回归测试：
+
+- `tests/e2e/integration/agent_persistence.integration_test.go`
+- `tests/e2e/integration/agent_recovery.integration_test.go`
+- `tests/e2e/integration/agent_integration_api.integration_test.go`
+- `tests/e2e/unit/agent/agentRunClient.test.ts`
+- `tests/e2e/unit/agent/apiAgentModel.test.ts`
+- `tests/e2e/unit/agent/agentEffect.test.ts`
+- `tests/e2e/unit/agent/openai_provider_test.go`
+- `tests/e2e/modules/agent/navigation.e2e.ts`
+- `tests/e2e/modules/agent/chat.e2e.ts`
+
+验证命令：
+
+```powershell
+pnpm typecheck
+pnpm test
+go test ./server/... ./tests/e2e/integration/... ./tests/e2e/unit/agent
+go vet ./server/...
+pnpm build
+pnpm test:e2e
+git diff --check
+```

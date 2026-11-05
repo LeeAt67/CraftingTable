@@ -1,13 +1,14 @@
 # ADR-001: Agent Run Recovery
 
-- **Status:** Proposed
+- **Status:** Accepted
+- **Implementation:** Implemented and verified on 2026-11-05
 - **Date:** 2026-11-05
 - **Decision owner:** leeat
 - **Design:** [CraftingTable Agent Persistence And Recovery Design](../superpowers/specs/2026-11-05-craftingtable-agent-persistence-recovery-design.md)
 
 ## Context
 
-CraftingTable 当前把 Agent Session 和 Message 保存在浏览器内存，Go 服务只把模型流绑定到一个 HTTP 请求。这会导致刷新后会话丢失，也会在浏览器断线时取消模型请求。
+实施前，CraftingTable 把 Agent Session 和 Message 保存在浏览器内存，Go 服务只把模型流绑定到一个 HTTP 请求。这会导致刷新后会话丢失，也会在浏览器断线时取消模型请求。
 
 目标架构要求：
 
@@ -81,15 +82,25 @@ CraftingTable 当前把 Agent Session 和 Message 保存在浏览器内存，Go 
 - 进程重启只允许把遗留 Run 收敛为 `interrupted`。
 - API Key 不得进入数据库、日志或客户端。
 
-## Migration Gate
+## Implementation Gate
 
-进入实现前必须确认：
+实现已确认：
 
 - 现有 Agent 页面交互和错误展示保持兼容。
 - 新接口继续使用统一 JSON envelope 和稳定错误码。
 - 迁移按文件名顺序执行，并可在已有 SQLite 文件上重复运行。
 - 现有 Today 表和数据不受影响。
 - 全部测试继续位于 `tests/e2e`。
+
+## Implementation Record
+
+2026-11-05 已完成单进程 SQLite 持久化和游标恢复：
+
+- Session、Message、Part、Run、Step、RunEvent 和幂等键使用 SQLite 持久化。
+- Run Coordinator 使用独立 Context，浏览器刷新或 HTTP 断线不会取消当前 Run。
+- 前端从 Session 详情中的 `activeRun.lastSequence` 恢复 SSE 订阅。
+- Go 进程重启会把遗留 `running` Run 收敛为 `interrupted`，不恢复原 Provider 流。
+- 测试证据位于 `tests/e2e/integration`、`tests/e2e/unit/agent` 和 `tests/e2e/modules/agent`。
 
 ## Follow-Up Decisions
 

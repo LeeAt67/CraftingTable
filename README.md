@@ -11,13 +11,16 @@ CraftingTable 是一个单用户个人事务工作台。当前仓库使用 React
 - Agent 会话工作区、独立会话侧栏和流式消息界面。
 - 一级导航、二级侧边栏和响应式布局。
 
-Agent 在开发模式通过 Go 服务端的 `/api/v1/agent/stream` 连接 OpenAI 兼容模型；浏览器不会读取模型 API Key。当前接口输出项目定义的 UI Message Stream 兼容子集，前端由 `agentTransport.ts`、`eventsource-parser`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 组成三层 pipe-through。Vitest 和 Playwright 固定使用 `FakeAgentModel`，Go 集成测试使用 loopback Fake Provider，以保证结果可重复。
+Agent 的 Session、Message、Part、Run 和生命周期事件保存在本地 SQLite，模型 Key 只存在于 Go 服务端。浏览器通过 `/api/v1/agent/session/*`、`/agent/message/*` 和带游标的 `/agent/run/stream` 使用 Go 服务；刷新页面后可以恢复历史，并继续订阅仍在 Go 进程内执行的 Run。前端由 `agentTransport.ts`、`eventsource-parser`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 组成三层 pipe-through。
+
+自动化测试不调用真实模型。Vitest 使用可控 Fake Model，Playwright 使用持久化 Go API 和 loopback OpenAI-compatible Fake Provider，Go 集成测试同样使用 loopback Fake Provider，以保证结果可重复。
 
 相关文档：
 
 - [术语表](docs/glossary.md)
 - [工程化设计规范](docs/superpowers/specs/2026-11-05-craftingtable-engineering-design.md)
 - [Agent 设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-design.md)
+- [Agent 持久化与恢复设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-persistence-recovery-design.md)
 - [Agent 流协议状态机设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-stream-state-machine-design.md)
 - [Agent 架构图](docs/architecture/README.md)
 - [早期个人工作台设计（已取代）](docs/superpowers/specs/2026-11-04-leeat-personal-workbench-design.md)
@@ -42,13 +45,14 @@ Agent 在开发模式通过 Go 服务端的 `/api/v1/agent/stream` 连接 OpenAI
 
 ## 后续计划：Agent Run 恢复与 Redis
 
-状态：当前实施阶段采用中断后手动重试。可恢复流、跨进程恢复和 Redis 职责必须完成方案对比后再进入生产实现。
+状态：单进程浏览器刷新恢复已实现；跨进程恢复和 Redis 职责必须完成方案对比后再进入生产实现。
 
 当前实施阶段的执行边界：
 
 - 浏览器断开不会自动终止服务端正在执行的 Run。
+- 页面刷新或短暂断线时，前端使用 `runId + lastSequence` 恢复同一 Run 的 SSE 订阅。
 - 服务端进程重启后，遗留的 `running` 或 `queued` Run 标记为 `interrupted`。
-- 不自动恢复原 Run；用户重试时创建新的 Run，并通过 `retryOfRunId` 关联原 Run。
+- 不自动恢复原 Run；用户重试时创建新的 Run，并保留原助手消息和历史 Run。
 - 已保存的 Message、MessagePart、Step 和 RunEvent 保留，不删除执行历史。
 
 后续需要重新比较以下四种恢复层级，再决定是否升级：
@@ -125,4 +129,4 @@ pnpm build
 
 `.env.local` 已被 Git 忽略，`.env.example` 只保留非敏感默认值。开发模式通过 `go run ./server/cmd/craftingtabled -env-file=.env.local` 启动后端；需要无网络调试时，可在本地环境显式设置 `VITE_AGENT_SOURCE=fake`。
 
-当前 Agent 会话和消息仍保存在浏览器进程内，刷新页面不会恢复。SQLite 会话持久化、Electron IPC、身份系统和生产级流恢复仍属于后续实施阶段。
+Agent 会话、消息、片段和 Run 保存在本地 SQLite。浏览器刷新和短暂断线恢复已支持；如果 Go 进程重启，正在运行的 Agent Run 会变为 `interrupted`，不会伪造或重放已经丢失的 token。Electron IPC、身份系统、多实例租约和生产级跨进程恢复仍属于后续实施阶段。

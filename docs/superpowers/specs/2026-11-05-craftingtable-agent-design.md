@@ -2,7 +2,7 @@
 
 日期：2026-11-05
 状态：已确认
-实施状态：分阶段落地
+实施状态：单 Agent 本地持久化与刷新恢复已实现，后续能力分阶段落地
 范围：单 Agent 会话、Run、消息片段、流式协议、持久化与后续能力扩展
 平台顺序：Desktop -> Web -> 手机
 工程约束：[CraftingTable 工程化设计规范](./2026-11-05-craftingtable-engineering-design.md)
@@ -66,6 +66,7 @@ CraftingTable Agent 是工作台中的个人助手，不是独立聊天产品的
 - 同一会话内支持多轮上下文。
 - 会话、消息和已展示片段写入本地数据库。
 - 刷新后恢复数据库已经提交的消息内容，并识别仍在服务端运行的 Run。
+- 浏览器短暂断线或刷新后，通过 Run 游标继续订阅同一服务端 Run。
 - 支持停止生成。
 - 支持失败或中断后的手动重试。
 - 前端吸收 Vercel AI SDK 的三层 pipe-through 思路，由项目自有 `agentTransport.ts`、`eventsource-parser`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 处理流；生产不依赖 `ai` 或 `@ai-sdk/react`，也不自建通用 SSE 分词器。
@@ -82,7 +83,7 @@ CraftingTable Agent 是工作台中的个人助手，不是独立聊天产品的
 - 不实现会话删除、归档、分享和搜索。
 - 不实现消息编辑、分支会话和人工评分。
 - 不实现附件、图片、语音和多模态输入。
-- 不实现自动断线重连和跨进程 Run 恢复。
+- 不实现服务端进程重启后的原 Run 续传、跨进程执行或迁移。
 - 不保证进程崩溃时尚未提交到数据库的尾部文本仍然存在。
 - 不接入 Redis、任务队列或持久化执行引擎。
 
@@ -100,9 +101,9 @@ CraftingTable Agent 是工作台中的个人助手，不是独立聊天产品的
 
 本文的完整目标始终有效，`3.2 当前非目标`只是阶段边界，不是对最终架构的拒绝。
 
-- 当前允许 Go 服务直接调用模型 Provider 并通过 SSE 返回，是因为本阶段只有模型 Step，没有本地工具执行和后台任务恢复。
+- 当前由单进程 Run Coordinator 直接调用模型 Provider 并通过 SSE 返回，是因为本阶段只有模型 Step，没有本地工具执行。
 - 引入工具、本地文件访问、命令执行、Skills 或 MCP 时，必须先建立独立的执行边界和隔离工作目录，不能继续把工具循环塞进 HTTP Controller。
-- 引入后台继续执行、断线重连或故障接管时，必须先稳定 `Run / Step / Event` 的状态机语义，再决定 Coordinator、队列、租约和 Redis 的职责。
+- 单进程后台执行、浏览器断线重连和启动中断收敛已经实现；引入多实例、跨进程恢复或故障接管时，必须先稳定租约和事件载体语义，再决定队列与 Redis 的职责。
 - SQLite、单进程锁和直接 SSE 都是当前适配器，不得泄漏成 Repository、Application 或前端契约的一部分。
 - 任何阶段都不得删除 `Run` 的持久身份、事件顺序、取消和错误语义，只为缩短当前实现。
 
@@ -761,7 +762,9 @@ Live Event 分发不能让慢订阅者阻塞 Executor。每个订阅者使用有
 
 ### 8.4 中断
 
-当前阶段不自动恢复原 Run；未来恢复能力必须复用同一 Run 状态机，不修改既有终态语义。
+浏览器刷新、SSE 读取端关闭或短暂断线只结束当前订阅。只要 Go 进程仍持有 Run Coordinator，前端就通过 `runId + after` 恢复同一 Run，并合并缺失游标之后的增量。
+
+Go 进程重启后不能续接原 Provider 流，因此不自动恢复原 Run。未来跨进程恢复能力必须复用同一 Run 状态机，不修改既有终态语义。
 
 服务启动时：
 
@@ -772,7 +775,7 @@ Live Event 分发不能让慢订阅者阻塞 Executor。每个订阅者使用有
 
 执行器同时维护最大运行时长和 stalled-run watchdog。超过阈值仍没有任何可观察进度时，必须取消 `execCtx`，使用独立持久化 context 标记 `interrupted` 并释放锁。
 
-用户重试时创建新的 Run，并通过 `retryOfRunId` 关联被中断的 Run。
+用户重试时创建新的 Run，并保留被中断的原 Run 和助手消息历史。目标契约中的 `retryOfRunId` 显式关联仍需后续迁移补充；当前通过同一助手消息的 `activeRunId` 确定展示尝试。
 
 ## 9. 并发
 
@@ -838,7 +841,7 @@ POST /api/v1/agent/message/retry
 }
 ```
 
-`messageLimit` 默认 40，最大 100。`messages` 只返回当前页消息；`messageParts` 返回用户消息片段，以及助手消息当前 `activeRunId` 对应的生成片段。`activeRun` 为 `running` 时，前端刷新后显示“生成中”，轮询该详情接口直到 Run 结束；当前实施阶段不重放未持久化的 token，后续恢复流必须使用稳定事件游标补齐增量。
+`messageLimit` 默认 40，最大 100。`messages` 只返回当前页消息；`messageParts` 返回用户消息片段，以及助手消息当前 `activeRunId` 对应的生成片段。`activeRun` 为 `running` 时，前端刷新后显示“生成中”，并从详情返回的 `lastSequence` 继续请求 SSE。服务端回放缺失增量后继续实时推送，不创建第二个 Run。
 
 会话不存在时返回 `404 AGENT_SESSION_NOT_FOUND`。
 
@@ -951,16 +954,15 @@ Run 不存在时返回 `404 AGENT_RUN_NOT_FOUND`。取消请求不携带 `client
 
 ```ts
 type AgentActiveRun = {
-  id: string
-  assistantMessageId: string
-  userMessageId: string
+  runId: string
+  assistantMessageId?: string
+  userMessageId?: string
   status: AgentRunStatus
-  startedAt: string
-  updatedAt: string
+  lastSequence: number
 }
 ```
 
-`status=running` 时，前端刷新后立即显示“生成中”，按 1 秒、2 秒、4 秒、8 秒退避轮询会话详情，最大间隔 10 秒；收到终态后停止轮询并加载最终 Part。轮询失败使用 `Result` 更新非阻塞错误状态，不能自动创建新 Run。当前阶段不重放缓存的 token，后续可恢复流必须使用相同 `runId` 和稳定事件游标。
+`status=running` 时，前端刷新后立即显示“生成中”，调用 `resumeRun` 从 `lastSequence` 重连 `/agent/run/stream`。可恢复网络错误使用有上限的指数退避；游标过期时重新读取 Session 详情并以持久化内容对账。恢复失败使用 `Result` 更新非阻塞错误状态，不能自动创建新 Run。
 
 ## 11. 流式协议
 
