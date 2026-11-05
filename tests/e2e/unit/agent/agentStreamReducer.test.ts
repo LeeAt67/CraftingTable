@@ -162,4 +162,55 @@ describe("agentStreamReducer", () => {
       ],
     });
   });
+
+  it("emits reasoning deltas without leaving the streaming phase", () => {
+    const [transition, error] = reduceAgentStream(
+      { phase: "streaming", lastCursor: 2 },
+      frame(
+        { type: "reasoning-delta", id: "reasoning-1", delta: "先分析" },
+        3,
+      ),
+    );
+
+    expect(error).toBeNull();
+    expect(transition).toEqual({
+      state: { phase: "streaming", lastCursor: 3 },
+      events: [
+        {
+          type: "reasoning-delta",
+          id: "reasoning-1",
+          delta: "先分析",
+          cursor: 3,
+        },
+      ],
+    });
+  });
+
+  it("emits reasoning start and ignores the end marker", () => {
+    const [started, startError] = reduceAgentStream(
+      { phase: "streaming", lastCursor: 3 },
+      frame({ type: "reasoning-start", id: "reasoning-1" }, 4),
+    );
+    const [ended, endError] = reduceAgentStream(
+      { phase: "streaming", lastCursor: 4 },
+      frame({ type: "reasoning-end", id: "reasoning-1" }, 5),
+    );
+
+    expect(startError).toBeNull();
+    expect(endError).toBeNull();
+    expect(started).toEqual({
+      state: { phase: "streaming", lastCursor: 4 },
+      events: [
+        {
+          type: "reasoning-start",
+          id: "reasoning-1",
+          cursor: 4,
+        },
+      ],
+    });
+    expect(ended).toEqual({
+      state: { phase: "streaming", lastCursor: 5 },
+      events: [],
+    });
+  });
 });

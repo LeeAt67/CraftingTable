@@ -63,10 +63,40 @@ export function reduceAgentStream(
     case "start":
       return invalid();
     case "start-step":
+    case "reasoning-end":
     case "text-start":
     case "text-end":
     case "finish-step":
       return [{ state: nextState(state.phase), events: [] }, null];
+    case "reasoning-start":
+      return [
+        {
+          state: nextState("streaming"),
+          events: [
+            {
+              type: "reasoning-start",
+              id: part.id,
+              cursor: frame.cursor,
+            },
+          ],
+        },
+        null,
+      ];
+    case "reasoning-delta":
+      return [
+        {
+          state: nextState("streaming"),
+          events: [
+            {
+              type: "reasoning-delta",
+              id: part.id,
+              delta: part.delta,
+              cursor: frame.cursor,
+            },
+          ],
+        },
+        null,
+      ];
     case "text-delta":
       return [
         {
