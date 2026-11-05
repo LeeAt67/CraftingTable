@@ -1,5 +1,5 @@
 import { FilePlus2, FolderPlus, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   DocNodeDialog,
@@ -17,12 +17,6 @@ import { useDocsStore } from "@/controllers/stores/docsStore";
 import type { DocNodeSummary } from "@/models/docContracts";
 
 export { buildTree };
-
-type SearchHitView = {
-  id: string;
-  title: string;
-  path: string[];
-};
 
 export function DocSidebar() {
   const navigate = useNavigate();
@@ -49,35 +43,6 @@ export function DocSidebar() {
   };
 
   const filtering = searchQuery.trim().length > 0;
-
-  // 服务端检索是异步的，先在本地树上过滤让输入立即可见，
-  // 服务端结果返回后按 id 去重合并。
-  const hits = useMemo<SearchHitView[]>(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) {
-      return [];
-    }
-    const byId = new Map(nodes.map((node) => [node.id, node]));
-    const pathOf = (node: DocNodeSummary) => {
-      const path: string[] = [];
-      const visited = new Set<string>([node.id]);
-      let parent = node.parentId ? byId.get(node.parentId) : undefined;
-      while (parent && !visited.has(parent.id)) {
-        visited.add(parent.id);
-        path.unshift(parent.title);
-        parent = parent.parentId ? byId.get(parent.parentId) : undefined;
-      }
-      return path;
-    };
-    const local = nodes
-      .filter((node) => node.title.toLowerCase().includes(query))
-      .map((node) => ({ id: node.id, title: node.title, path: pathOf(node) }));
-    const seen = new Set(local.map((hit) => hit.id));
-    const remote = searchResults
-      .filter((hit) => !seen.has(hit.id))
-      .map((hit) => ({ id: hit.id, title: hit.title, path: hit.path }));
-    return [...local, ...remote];
-  }, [nodes, searchQuery, searchResults]);
 
   const handleAction = (action: DocNodeAction, node: DocNodeSummary) => {
     setDialog({ type: action, node });
@@ -131,21 +96,25 @@ export function DocSidebar() {
       <nav aria-label="文档树" className="mt-4 min-h-0 flex-1 overflow-y-auto">
         {filtering ? (
           <ul className="space-y-0.5" aria-label="搜索结果">
-            {hits.map((hit) => (
+            {searchResults.map((hit) => (
               <li key={hit.id}>
                 <button
                   type="button"
                   onClick={() => navigate(`/docs/${hit.id}`)}
-                  title={hit.path.length > 0 ? hit.path.join(" / ") : undefined}
                   className="flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-surface"
                 >
                   <span className="truncate text-sm text-textPrimary">
                     {hit.title}
                   </span>
+                  {hit.path.length > 0 && (
+                    <span className="truncate text-[11px] text-textSecondary">
+                      {hit.path.join(" / ")}
+                    </span>
+                  )}
                 </button>
               </li>
             ))}
-            {hits.length === 0 && (
+            {searchResults.length === 0 && (
               <li className="px-2 py-2 text-xs text-textSecondary">
                 没有匹配的文档
               </li>
