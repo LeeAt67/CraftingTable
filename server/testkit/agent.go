@@ -5,6 +5,7 @@ package testkit
 import (
 	"github.com/leeat/craftingtable/server/internal/agent/core"
 	"github.com/leeat/craftingtable/server/internal/agent/domain"
+	"github.com/leeat/craftingtable/server/internal/agent/provider"
 	"github.com/leeat/craftingtable/server/internal/platform/store"
 )
 
@@ -22,10 +23,12 @@ type StreamProvider = core.StreamProvider
 type CreateSessionRecord = core.CreateSessionRecord
 type CreateSendRunRecord = core.CreateSendRunRecord
 type CreateRetryRunRecord = core.CreateRetryRunRecord
+type OpenAICompatibleConfig = provider.OpenAICompatibleConfig
 
 var OpenSQLite = store.OpenSQLite
 var NewEventJournal = core.NewEventJournal
 var NewAgentService = core.NewService
+var NewOpenAICompatible = provider.NewOpenAICompatible
 
 const (
 	RunCompleted    = domain.RunCompleted

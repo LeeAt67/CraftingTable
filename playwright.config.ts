@@ -14,6 +14,11 @@ export default defineConfig({
   },
   webServer: [
     {
+      command: "node scripts/fakeAgentProvider.mjs",
+      url: "http://127.0.0.1:3201/healthz",
+      reuseExistingServer: false,
+    },
+    {
       command: "pnpm e2e:api",
       url: `http://127.0.0.1:${apiPort}/api/v1/categories`,
       reuseExistingServer: false,

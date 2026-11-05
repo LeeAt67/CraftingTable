@@ -182,7 +182,8 @@ export async function openAgentRunStream(input: {
   signal: AbortSignal;
   fetchImpl: AgentFetch;
 }): Promise<ReadableStream<Uint8Array>> {
-  const response = await input.fetchImpl(
+  const fetchImpl = input.fetchImpl;
+  const response = await fetchImpl(
     `${input.baseUrl}/agent/run/stream?runId=${encodeURIComponent(input.runId)}&after=${input.afterSequence}`,
     { signal: input.signal },
   );

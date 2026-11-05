@@ -9,8 +9,11 @@ test("creates a session and completes a message", async ({ page }) => {
   await composer.fill("整理今天的重点");
   await page.getByRole("button", { name: "发送" }).click();
 
-  await expect(page.getByText("整理今天的重点")).toBeVisible();
-  await expect(page.getByText(/收到你的请求/)).toBeVisible();
+  const messages = page.getByRole("log", { name: "会话消息" });
+  await expect(
+    messages.getByText("整理今天的重点", { exact: true }),
+  ).toBeVisible();
+  await expect(messages.getByText(/已收到：整理今天的重点/)).toBeVisible();
   await expect(
     page.getByRole("link", { name: "整理今天的重点" }),
   ).toBeVisible();
@@ -22,9 +25,8 @@ test("blocks a second session while the first session is streaming", async ({
 }) => {
   await page.goto("/#/agent");
   await page.getByRole("button", { name: "新建会话" }).click();
-  const sessionHref = await page
-    .getByRole("link", { name: "新会话" })
-    .getAttribute("href");
+  await expect(page).toHaveURL(/#\/agent\/[0-9a-f-]+/);
+  const sessionHref = new URL(page.url()).hash;
   const composer = page.getByRole("textbox", { name: "发送给 Agent" });
   await composer.fill("会话 A 正在生成");
   await page.getByRole("button", { name: "发送" }).click();
@@ -57,5 +59,31 @@ test("stops and retries a reply without duplicating the user message", async ({
     timeout: 10_000,
   });
   await expect(page.getByLabel("你的消息")).toHaveCount(1);
-  await expect(page.getByText(/收到你的请求/)).toBeVisible();
+  await expect(
+    page
+      .getByRole("log", { name: "会话消息" })
+      .getByText(/已收到：停止后重试/),
+  ).toBeVisible();
+});
+
+test("agent continues after a page reload during generation", async ({
+  page,
+}) => {
+  await page.goto("/#/agent");
+  await page.getByRole("button", { name: "新建会话" }).click();
+  await page
+    .getByRole("textbox", { name: "发送给 Agent" })
+    .fill("慢速恢复测试");
+  await page.getByRole("button", { name: "发送" }).click();
+
+  const messages = page.getByRole("log", { name: "会话消息" });
+  await expect(messages.getByText("第一段", { exact: false })).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.reload();
+
+  await expect(messages.getByText("第一段", { exact: false })).toBeVisible();
+  await expect(
+    messages.getByText("第一段第二段", { exact: true }),
+  ).toBeVisible({ timeout: 10_000 });
 });

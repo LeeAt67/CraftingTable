@@ -90,6 +90,26 @@ function baseInput(
 }
 
 describe("AgentRunClient", () => {
+  it("calls the injected fetch without an object receiver", async () => {
+    const receivers: unknown[] = [];
+    const input = baseInput(function (this: unknown) {
+      receivers.push(this);
+      return Promise.resolve(
+        streamResponse([
+          startFrame(1),
+          textFrame(2, "好"),
+          finishFrame(3),
+          "data: [DONE]\n\n",
+        ]),
+      );
+    });
+
+    const [, error] = await consumeAgentRun(input);
+
+    expect(error).toBeNull();
+    expect(receivers).toEqual([undefined]);
+  });
+
   it("reconnects after an interrupted stream using the last cursor", async () => {
     const requestedUrls: string[] = [];
     const snapshots: string[] = [];

@@ -11,8 +11,8 @@ import (
 var ErrProviderNotConfigured = errors.New("agent provider not configured")
 
 type ProviderMessage struct {
-	Role    string
-	Content string
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
 type StreamProvider interface {

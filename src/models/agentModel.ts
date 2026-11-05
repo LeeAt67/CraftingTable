@@ -65,13 +65,16 @@ function fakeModelOptions() {
 }
 
 export const agentModel: AgentModel =
-  import.meta.env.MODE === "test" ||
-  import.meta.env.MODE === "e2e" ||
-  import.meta.env.VITE_AGENT_SOURCE === "fake"
-    ? createFakeAgentModel(fakeModelOptions())
-    : import.meta.env.VITE_AGENT_SOURCE === "api" ||
-        import.meta.env.MODE === "development"
-      ? createApiAgentModel({
-          baseUrl: import.meta.env.VITE_API_BASE ?? "/api/v1",
-        })
+  import.meta.env.VITE_AGENT_SOURCE === "api"
+    ? createApiAgentModel({
+        baseUrl: import.meta.env.VITE_API_BASE ?? "/api/v1",
+      })
+    : import.meta.env.MODE === "test" ||
+        import.meta.env.MODE === "e2e" ||
+        import.meta.env.VITE_AGENT_SOURCE === "fake"
+      ? createFakeAgentModel(fakeModelOptions())
+      : import.meta.env.MODE === "development"
+        ? createApiAgentModel({
+            baseUrl: import.meta.env.VITE_API_BASE ?? "/api/v1",
+          })
       : notConfiguredAgentModel;
