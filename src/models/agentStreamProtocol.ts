@@ -1,5 +1,6 @@
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import {
+  advanceAgentStreamCursor,
   completeAgentStream,
   createAgentStreamState,
   reduceAgentStream,
@@ -46,6 +47,11 @@ export async function* readAgentStream(
         continue;
       }
 
+      const cursor = Number.parseInt(value.id ?? "", 10);
+      if (!Number.isSafeInteger(cursor) || cursor < 1) {
+        throw agentRequestError(invalidProtocolError);
+      }
+
       let data: unknown;
       try {
         data = JSON.parse(value.data);
@@ -58,12 +64,20 @@ export async function* readAgentStream(
         throw agentRequestError(parseError);
       }
       if (parsed.kind === "unknown") {
+        const [nextState, cursorError] = advanceAgentStreamCursor(
+          state,
+          cursor,
+        );
+        if (cursorError) {
+          throw agentRequestError(cursorError);
+        }
+        state = nextState;
         continue;
       }
 
       const [transition, reduceError] = reduceAgentStream(
         state,
-        parsed.part,
+        { cursor, part: parsed.part },
       );
       if (reduceError) {
         throw agentRequestError(reduceError);

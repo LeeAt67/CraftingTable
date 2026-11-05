@@ -74,14 +74,15 @@ const knownPartTypes = new Set([
 export type AgentStreamPart = z.infer<typeof streamPartSchema>;
 
 export type AgentStreamEvent =
-  | { type: "text-delta"; id: string; delta: string }
+  | { type: "text-delta"; id: string; delta: string; cursor: number }
   | {
       type: "finish";
       finishReason?: string;
       runId?: string;
       status?: string;
+      cursor: number;
     }
-  | { type: "error"; error: AgentError };
+  | { type: "error"; error: AgentError; cursor: number };
 
 export type ParsedAgentStreamPart =
   | { kind: "known"; part: AgentStreamPart }

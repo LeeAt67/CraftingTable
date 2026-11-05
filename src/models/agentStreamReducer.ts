@@ -10,6 +10,12 @@ export type AgentStreamPhase = "awaiting-start" | "streaming" | "terminal";
 
 export type AgentStreamState = {
   phase: AgentStreamPhase;
+  lastCursor: number;
+};
+
+export type AgentStreamFrame = {
+  cursor: number;
+  part: AgentStreamPart;
 };
 
 export type AgentStreamTransition = {
@@ -17,8 +23,10 @@ export type AgentStreamTransition = {
   events: AgentStreamEvent[];
 };
 
-export function createAgentStreamState(): AgentStreamState {
-  return { phase: "awaiting-start" };
+export function createAgentStreamState(
+  lastCursor = 0,
+): AgentStreamState {
+  return { phase: "awaiting-start", lastCursor };
 }
 
 function invalid<T>(): Result<T> {
@@ -27,8 +35,19 @@ function invalid<T>(): Result<T> {
 
 export function reduceAgentStream(
   state: AgentStreamState,
-  part: AgentStreamPart,
+  frame: AgentStreamFrame,
 ): Result<AgentStreamTransition> {
+  if (
+    !Number.isSafeInteger(frame.cursor) ||
+    frame.cursor <= state.lastCursor
+  ) {
+    return invalid();
+  }
+  const part = frame.part;
+  const nextState = (phase: AgentStreamPhase): AgentStreamState => ({
+    phase,
+    lastCursor: frame.cursor,
+  });
   if (state.phase === "terminal") {
     return invalid();
   }
@@ -37,7 +56,7 @@ export function reduceAgentStream(
     if (part.type !== "start") {
       return invalid();
     }
-    return [{ state: { phase: "streaming" }, events: [] }, null];
+    return [{ state: nextState("streaming"), events: [] }, null];
   }
 
   switch (part.type) {
@@ -47,25 +66,33 @@ export function reduceAgentStream(
     case "text-start":
     case "text-end":
     case "finish-step":
-      return [{ state, events: [] }, null];
+      return [{ state: nextState(state.phase), events: [] }, null];
     case "text-delta":
       return [
         {
-          state,
-          events: [{ type: "text-delta", id: part.id, delta: part.delta }],
+          state: nextState("streaming"),
+          events: [
+            {
+              type: "text-delta",
+              id: part.id,
+              delta: part.delta,
+              cursor: frame.cursor,
+            },
+          ],
         },
         null,
       ];
     case "finish":
       return [
         {
-          state: { phase: "terminal" },
+          state: nextState("terminal"),
           events: [
             {
               type: "finish",
               finishReason: part.finishReason,
               runId: part.messageMetadata.runId,
               status: part.messageMetadata.status,
+              cursor: frame.cursor,
             },
           ],
         },
@@ -74,7 +101,7 @@ export function reduceAgentStream(
     case "error":
       return [
         {
-          state: { phase: "terminal" },
+          state: nextState("terminal"),
           events: [
             {
               type: "error",
@@ -84,12 +111,27 @@ export function reduceAgentStream(
                 message: part.errorText,
                 retryable: true,
               },
+              cursor: frame.cursor,
             },
           ],
         },
         null,
       ];
   }
+}
+
+export function advanceAgentStreamCursor(
+  state: AgentStreamState,
+  cursor: number,
+): Result<AgentStreamState> {
+  if (
+    state.phase === "terminal" ||
+    !Number.isSafeInteger(cursor) ||
+    cursor <= state.lastCursor
+  ) {
+    return invalid();
+  }
+  return [{ ...state, lastCursor: cursor }, null];
 }
 
 export function completeAgentStream(

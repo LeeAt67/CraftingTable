@@ -16,52 +16,67 @@ const startPart = {
   },
 } satisfies AgentStreamPart;
 
+function frame(part: AgentStreamPart, cursor: number) {
+  return { cursor, part };
+}
+
 describe("agentStreamReducer", () => {
   it("moves from awaiting-start to streaming on start", () => {
     const [transition, error] = reduceAgentStream(
       createAgentStreamState(),
-      startPart,
+      frame(startPart, 1),
     );
 
     expect(error).toBeNull();
     expect(transition).toEqual({
-      state: { phase: "streaming" },
+      state: { phase: "streaming", lastCursor: 1 },
       events: [],
     });
   });
 
-  it("emits text deltas while remaining in streaming", () => {
+  it("emits text deltas with their cursor while remaining in streaming", () => {
     const [transition, error] = reduceAgentStream(
-      { phase: "streaming" },
-      { type: "text-delta", id: "part-1", delta: "你好" },
+      { phase: "streaming", lastCursor: 1 },
+      frame({ type: "text-delta", id: "part-1", delta: "你好" }, 2),
     );
 
     expect(error).toBeNull();
     expect(transition).toEqual({
-      state: { phase: "streaming" },
-      events: [{ type: "text-delta", id: "part-1", delta: "你好" }],
+      state: { phase: "streaming", lastCursor: 2 },
+      events: [
+        {
+          type: "text-delta",
+          id: "part-1",
+          delta: "你好",
+          cursor: 2,
+        },
+      ],
     });
   });
 
   it("moves to terminal and emits finish", () => {
     const [transition, error] = reduceAgentStream(
-      { phase: "streaming" },
-      {
-        type: "finish",
-        finishReason: "stop",
-        messageMetadata: { runId: "run-1", status: "completed" },
-      },
+      { phase: "streaming", lastCursor: 1 },
+      frame(
+        {
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: { runId: "run-1", status: "completed" },
+        },
+        2,
+      ),
     );
 
     expect(error).toBeNull();
     expect(transition).toEqual({
-      state: { phase: "terminal" },
+      state: { phase: "terminal", lastCursor: 2 },
       events: [
         {
           type: "finish",
           finishReason: "stop",
           runId: "run-1",
           status: "completed",
+          cursor: 2,
         },
       ],
     });
@@ -69,12 +84,28 @@ describe("agentStreamReducer", () => {
 
   it("rejects a second terminal event", () => {
     const [, error] = reduceAgentStream(
-      { phase: "terminal" },
-      {
-        type: "finish",
-        finishReason: "stop",
-        messageMetadata: { runId: "run-1", status: "completed" },
-      },
+      { phase: "terminal", lastCursor: 2 },
+      frame(
+        {
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: { runId: "run-1", status: "completed" },
+        },
+        3,
+      ),
+    );
+
+    expect(error).toMatchObject({
+      code: "PROTOCOL_INVALID_METADATA",
+      kind: "protocol",
+      retryable: false,
+    });
+  });
+
+  it("rejects a cursor that does not advance", () => {
+    const [, error] = reduceAgentStream(
+      { phase: "streaming", lastCursor: 2 },
+      frame({ type: "text-delta", id: "part-1", delta: "重复" }, 2),
     );
 
     expect(error).toMatchObject({
@@ -85,31 +116,38 @@ describe("agentStreamReducer", () => {
   });
 
   it("reports unexpected EOF unless terminal was reached", () => {
-    expect(completeAgentStream({ phase: "streaming" })).toEqual([
+    expect(
+      completeAgentStream({ phase: "streaming", lastCursor: 2 }),
+    ).toEqual([
       null,
       expect.objectContaining({ code: "PROTOCOL_UNEXPECTED_EOF" }),
     ]);
-    expect(completeAgentStream({ phase: "terminal" })).toEqual([null, null]);
+    expect(
+      completeAgentStream({ phase: "terminal", lastCursor: 3 }),
+    ).toEqual([null, null]);
   });
 
   it("maps a structured error chunk to a terminal error event", () => {
     const [transition, error] = reduceAgentStream(
-      { phase: "streaming" },
-      {
-        type: "error",
-        errorText: "模型生成失败",
-        agentError: {
-          code: "AGENT_PROVIDER_FAILED",
-          kind: "server",
-          message: "模型生成失败",
-          retryable: true,
+      { phase: "streaming", lastCursor: 1 },
+      frame(
+        {
+          type: "error",
+          errorText: "模型生成失败",
+          agentError: {
+            code: "AGENT_PROVIDER_FAILED",
+            kind: "server",
+            message: "模型生成失败",
+            retryable: true,
+          },
         },
-      },
+        2,
+      ),
     );
 
     expect(error).toBeNull();
     expect(transition).toEqual({
-      state: { phase: "terminal" },
+      state: { phase: "terminal", lastCursor: 2 },
       events: [
         {
           type: "error",
@@ -119,6 +157,7 @@ describe("agentStreamReducer", () => {
             message: "模型生成失败",
             retryable: true,
           },
+          cursor: 2,
         },
       ],
     });

@@ -33,36 +33,36 @@ describe("ApiAgentModel", () => {
           new ReadableStream({
             start(controller) {
               controller.enqueue(
-                encoder.encode(`data: ${start}\n\n`),
+                encoder.encode(`id: 1\ndata: ${start}\n\n`),
               );
               controller.enqueue(
-                encoder.encode('data: {"type":"start-step"}\n\n'),
+                encoder.encode('id: 2\ndata: {"type":"start-step"}\n\n'),
               );
               controller.enqueue(
                 encoder.encode(
-                  'data: {"type":"text-start","id":"assistant-part"}\n\n',
+                  'id: 3\ndata: {"type":"text-start","id":"assistant-part"}\n\n',
                 ),
               );
               controller.enqueue(
                 encoder.encode(
-                  'data: {"type":"text-delta","id":"assistant-part","delta":"你好"}\n\n',
+                  'id: 4\ndata: {"type":"text-delta","id":"assistant-part","delta":"你好"}\n\n',
                 ),
               );
               controller.enqueue(
                 encoder.encode(
-                  'data: {"type":"text-delta","id":"assistant-part","delta":"，Leeat"}\n\n',
+                  'id: 5\ndata: {"type":"text-delta","id":"assistant-part","delta":"，Leeat"}\n\n',
                 ),
               );
               controller.enqueue(
                 encoder.encode(
-                  'data: {"type":"text-end","id":"assistant-part"}\n\n',
+                  'id: 6\ndata: {"type":"text-end","id":"assistant-part"}\n\n',
                 ),
               );
               controller.enqueue(
-                encoder.encode('data: {"type":"finish-step"}\n\n'),
+                encoder.encode('id: 7\ndata: {"type":"finish-step"}\n\n'),
               );
               controller.enqueue(
-                encoder.encode(`data: ${finish}\n\n`),
+                encoder.encode(`id: 8\ndata: ${finish}\n\n`),
               );
               controller.enqueue(encoder.encode("data: [DONE]\n\n"));
               controller.close();
@@ -187,7 +187,7 @@ describe("ApiAgentModel", () => {
             start(controller) {
               controller.enqueue(
                 encoder.encode(
-                  `data: ${JSON.stringify({
+                  `id: 1\ndata: ${JSON.stringify({
                     type: "start",
                     messageId: requestBody.assistantMessageId,
                     messageMetadata: {

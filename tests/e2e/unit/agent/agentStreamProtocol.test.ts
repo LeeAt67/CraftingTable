@@ -5,6 +5,27 @@ import {
 } from "@/models/agentStreamProtocol";
 
 function streamOf(text: string) {
+  let sequence = 0;
+  const events = text
+    .split(/\n\n+/)
+    .filter((event) => event.trim() !== "")
+    .map((event) => {
+      if (event.includes("data: [DONE]")) {
+        return event;
+      }
+      const explicitCursor = event.match(/^id:\s*(\d+)$/m);
+      if (explicitCursor) {
+        sequence = Math.max(sequence, Number(explicitCursor[1]));
+        return event;
+      }
+      sequence += 1;
+      return `id: ${sequence}\n${event}`;
+    })
+    .join("\n\n");
+  return rawStreamOf(`${events}\n\n`);
+}
+
+function rawStreamOf(text: string) {
   const encoder = new TextEncoder();
   return new ReadableStream<Uint8Array>({
     start(controller) {
@@ -25,6 +46,52 @@ async function collect(
 }
 
 describe("agentStreamProtocol", () => {
+  it("attaches and validates the SSE cursor", async () => {
+    const stream = streamOf(
+      [
+        'id: 1\ndata: {"type":"start","messageId":"assistant-1","messageMetadata":{"sessionId":"session-1","runId":"run-1","userMessageId":"user-1"}}',
+        'id: 2\ndata: {"type":"text-delta","id":"part-1","delta":"你好"}',
+        'id: 3\ndata: {"type":"finish","messageMetadata":{"runId":"run-1","status":"completed"}}',
+        "data: [DONE]",
+        "",
+        "",
+      ].join("\n\n"),
+    );
+
+    await expect(collect(readAgentStream(stream))).resolves.toEqual([
+      expect.objectContaining({ type: "text-delta", cursor: 2 }),
+      expect.objectContaining({ type: "finish", cursor: 3 }),
+    ]);
+  });
+
+  it("rejects missing, non-numeric, or regressing cursors", async () => {
+    const missing = rawStreamOf(
+      'data: {"type":"start","messageId":"message-1","messageMetadata":{"sessionId":"session-1","runId":"run-1","userMessageId":"user-1"}}\n\n',
+    );
+    await expect(collect(readAgentStream(missing))).rejects.toMatchObject({
+      agentError: { code: "PROTOCOL_INVALID_METADATA" },
+    });
+
+    const nonNumeric = rawStreamOf(
+      'id: nope\ndata: {"type":"start","messageId":"message-1","messageMetadata":{"sessionId":"session-1","runId":"run-1","userMessageId":"user-1"}}\n\n',
+    );
+    await expect(collect(readAgentStream(nonNumeric))).rejects.toMatchObject({
+      agentError: { code: "PROTOCOL_INVALID_METADATA" },
+    });
+
+    const regressing = rawStreamOf(
+      [
+        'id: 1\ndata: {"type":"start","messageId":"message-1","messageMetadata":{"sessionId":"session-1","runId":"run-1","userMessageId":"user-1"}}',
+        'id: 1\ndata: {"type":"text-delta","id":"part-1","delta":"重复"}',
+        "",
+        "",
+      ].join("\n\n"),
+    );
+    await expect(collect(readAgentStream(regressing))).rejects.toMatchObject({
+      agentError: { code: "PROTOCOL_INVALID_METADATA" },
+    });
+  });
+
   it("rejects a stream that starts with text before the start event", async () => {
     const stream = streamOf(
       'data: {"type":"text-delta","id":"part-1","delta":"你好"}\n\n',
@@ -193,12 +260,13 @@ describe("agentStreamProtocol", () => {
     );
 
     await expect(collect(readAgentStream(stream))).resolves.toEqual([
-      { type: "text-delta", id: "part-1", delta: "你好" },
+      { type: "text-delta", id: "part-1", delta: "你好", cursor: 3 },
       {
         type: "finish",
         finishReason: "stop",
         runId: "run-1",
         status: "completed",
+        cursor: 4,
       },
     ]);
   });
@@ -244,6 +312,7 @@ describe("agentStreamProtocol", () => {
           message: "模型生成失败",
           retryable: true,
         },
+        cursor: 2,
       },
     ]);
   });
