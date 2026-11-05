@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/leeat/craftingtable/server/internal/agent/core"
 )
 
 var (
@@ -21,15 +23,10 @@ var (
 )
 
 // Message 是发送给 OpenAI 兼容模型的消息。
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
+type Message = core.ProviderMessage
 
 // StreamProvider 打开一次模型流。
-type StreamProvider interface {
-	Stream(ctx context.Context, messages []Message) (io.ReadCloser, error)
-}
+type StreamProvider = core.StreamProvider
 
 // OpenAICompatibleConfig 配置 OpenAI 兼容模型服务。
 type OpenAICompatibleConfig struct {
