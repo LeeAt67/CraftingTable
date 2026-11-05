@@ -3,12 +3,14 @@ import type {
   AgentError,
   AgentMessage,
   AgentMessagePart,
+  AgentReasoningPart,
   AgentSendHandlers,
   AgentSendResult,
   AgentRunStatus,
   AgentSendInput,
   AgentSession,
   AgentSessionDetail,
+  AgentTextPart,
   Result,
 } from "@/models/agentContracts";
 import type { AgentModel } from "@/models/agentModel";
@@ -23,6 +25,15 @@ type FakeAgentModelOptions = {
     runtime: {
       assistantMessageId: string;
       assistantPartId: string;
+      reasoningPartId: string;
+      runId: string;
+    },
+  ) => AsyncIterable<string>;
+  reasoningChunks?: (
+    input: AgentSendInput,
+    runtime: {
+      assistantMessageId: string;
+      reasoningPartId: string;
       runId: string;
     },
   ) => AsyncIterable<string>;
@@ -105,7 +116,16 @@ function clonePart(part: AgentMessagePart): AgentMessagePart {
       },
     };
   }
-  return { ...part, content: { ...part.content } };
+  if (part.type === "reasoning") {
+    return {
+      ...part,
+      content: { type: "reasoning", text: part.content.text },
+    };
+  }
+  return {
+    ...part,
+    content: { type: "text", text: part.content.text },
+  };
 }
 
 function isRetryableMessage(message: AgentMessage) {
@@ -197,11 +217,24 @@ export function createFakeAgentModel(
   }): Promise<Result<AgentSendResult>> => {
     const timestamp = now();
     const runId = createId();
-    const assistantPart: AgentMessagePart = {
+    const reasoningPart: AgentReasoningPart | null = options.reasoningChunks
+      ? {
+          id: createId(),
+          messageId: assistantMessage.id,
+          runId,
+          index: 0,
+          type: "reasoning",
+          status: "streaming",
+          content: { type: "reasoning", text: "" },
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }
+      : null;
+    const assistantPart: AgentTextPart = {
       id: createId(),
       messageId: assistantMessage.id,
       runId,
-      index: 0,
+      index: reasoningPart ? 1 : 0,
       type: "text",
       status: "streaming",
       content: { type: "text", text: "" },
@@ -213,6 +246,7 @@ export function createFakeAgentModel(
     assistantMessage.updatedAt = timestamp;
     store.partsByMessageId.set(assistantMessage.id, [
       ...(store.partsByMessageId.get(assistantMessage.id) ?? []),
+      ...(reasoningPart ? [reasoningPart] : []),
       assistantPart,
     ]);
     session.updatedAt = timestamp;
@@ -237,10 +271,42 @@ export function createFakeAgentModel(
       status: "running",
     });
 
+    const currentParts = () =>
+      [reasoningPart, assistantPart]
+        .filter(
+          (part): part is AgentReasoningPart | AgentTextPart =>
+            part !== null,
+        )
+        .map(clonePart);
+
+    let reasoningText = "";
     let accumulated = "";
     let streamFailure: unknown = null;
 
     try {
+      if (reasoningPart && options.reasoningChunks) {
+        const reasoningRuntime = {
+          assistantMessageId: assistantMessage.id,
+          reasoningPartId: reasoningPart.id,
+          runId,
+        };
+        for await (const chunk of options.reasoningChunks(
+          requestInput,
+          reasoningRuntime,
+        )) {
+          if (run.abortController.signal.aborted) {
+            break;
+          }
+          reasoningText += chunk;
+          reasoningPart.content = { type: "reasoning", text: reasoningText };
+          reasoningPart.updatedAt = now();
+          assistantMessage.updatedAt = reasoningPart.updatedAt;
+          handlers.onSnapshot({
+            message: cloneMessage(assistantMessage),
+            parts: currentParts(),
+          });
+        }
+      }
       const chunks = options.responseChunks
         ? options.responseChunks(
             requestInput,
@@ -249,6 +315,7 @@ export function createFakeAgentModel(
             {
               assistantMessageId: assistantMessage.id,
               assistantPartId: assistantPart.id,
+              reasoningPartId: reasoningPart?.id ?? "",
               runId,
             },
           )
@@ -267,7 +334,7 @@ export function createFakeAgentModel(
         assistantMessage.updatedAt = assistantPart.updatedAt;
         handlers.onSnapshot({
           message: cloneMessage(assistantMessage),
-          parts: [clonePart(assistantPart)],
+          parts: currentParts(),
         });
       }
     } catch (cause) {
@@ -296,6 +363,10 @@ export function createFakeAgentModel(
     assistantMessage.updatedAt = finishedAt;
     assistantPart.status = terminalPartStatus;
     assistantPart.updatedAt = finishedAt;
+    if (reasoningPart) {
+      reasoningPart.status = terminalPartStatus;
+      reasoningPart.updatedAt = finishedAt;
+    }
     const agentError =
       streamFailure && terminalStatus !== "cancelled"
         ? agentErrorFrom(streamFailure)
@@ -325,6 +396,7 @@ export function createFakeAgentModel(
       store.partsByMessageId.get(assistantMessage.id) ?? []
     )
       .filter((part) => !part.runId || part.runId === runId)
+      .filter((part) => part.type !== "reasoning" || reasoningText !== "")
       .map(clonePart);
     handlers.onSnapshot({
       message: cloneMessage(assistantMessage),
