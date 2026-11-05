@@ -23,7 +23,9 @@ function MessageBody({
 
   if (visibleParts.length === 0) {
     return (
-      <p className="animate-pulse text-sm text-textSecondary">正在思考…</p>
+      <p className="animate-pulse text-sm leading-6 text-textSecondary motion-reduce:animate-none">
+        正在思考…
+      </p>
     );
   }
 
@@ -96,7 +98,7 @@ export function AgentMessageList({
       <p role="status" aria-atomic="true" className="sr-only">
         {runAnnouncement(messages)}
       </p>
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 min-[768px]:px-8 min-[768px]:py-8">
+      <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 px-4 py-5 min-[768px]:px-5 min-[768px]:py-6">
         {messages.map((message) => {
           const isUser = message.role === "user";
           const canRetry =
@@ -110,28 +112,42 @@ export function AgentMessageList({
             <article
               key={message.id}
               aria-label={isUser ? "你的消息" : "Agent 消息"}
-              className={cn(
-                "flex min-w-0",
-                isUser ? "justify-end" : "justify-start",
-              )}
+              className="flex min-w-0 flex-col gap-1.5"
             >
-              <div
+              <p
                 className={cn(
-                  "min-w-0 max-w-[90%] min-[768px]:max-w-[78%]",
+                  "flex min-h-5 items-center gap-1.5 px-1 text-[11px] font-medium",
                   isUser
-                    ? "rounded-lg bg-brand px-4 py-3 text-white"
-                    : "border-l-2 border-brand bg-surface px-4 py-3 text-textPrimary",
-                  message.status === "failed" && "border-destructive",
+                    ? "justify-end text-brand"
+                    : "justify-start text-textSecondary",
                 )}
               >
-                <p
-                  className={cn(
-                    "mb-1 text-[11px] font-medium",
-                    isUser ? "text-white/75" : "text-textSecondary",
-                  )}
-                >
-                  {isUser ? "你" : "Agent"}
-                </p>
+                {!isUser && (
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "size-1.5 rounded-full bg-textSecondary",
+                      message.status === "streaming" &&
+                        "animate-pulse bg-brand motion-reduce:animate-none",
+                    )}
+                  />
+                )}
+                <span>{isUser ? "leeat" : "Agent"}</span>
+                {message.status === "streaming" && (
+                  <span className="font-normal text-textSecondary">
+                    · 生成中
+                  </span>
+                )}
+              </p>
+              <div
+                className={cn(
+                  "min-w-0",
+                  isUser
+                    ? "ml-auto max-w-[92%] rounded-2xl rounded-br-md bg-brandSoft px-3.5 py-2.5 text-textPrimary min-[768px]:max-w-[600px]"
+                    : "max-w-full px-3.5 py-1 text-textPrimary min-[768px]:pr-10",
+                  message.status === "failed" && "text-destructive",
+                )}
+              >
                 <MessageBody
                   message={message}
                   parts={partsByMessageId[message.id] ?? []}
@@ -142,7 +158,7 @@ export function AgentMessageList({
                     variant="link"
                     size="sm"
                     onClick={onRetry}
-                    className="mt-2 h-auto p-0"
+                    className="mt-2 h-auto p-0 text-xs"
                   >
                     重试回复
                   </Button>

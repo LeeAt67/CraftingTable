@@ -12,7 +12,7 @@ export function AgentErrorBanner({
   return (
     <div
       role="alert"
-      className="mx-3 mt-3 flex items-start gap-3 rounded-lg border border-destructive/40 bg-surface px-3 py-2.5 min-[768px]:mx-8"
+      className="mx-auto mt-3 flex w-[calc(100%-1.5rem)] max-w-[760px] items-start gap-2.5 rounded-xl border border-destructive/30 bg-surface px-3.5 py-3 min-[768px]:w-[calc(100%-2.5rem)]"
     >
       <AlertCircle
         aria-hidden="true"

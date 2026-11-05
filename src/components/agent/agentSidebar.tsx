@@ -1,4 +1,4 @@
-import { MessageSquare, Plus } from "lucide-react";
+import { Bot, MessageSquare, SquarePen } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/utils";
@@ -36,36 +36,40 @@ export function AgentSidebar() {
   return (
     <aside
       aria-label="Agent 会话"
-      className="flex h-full w-[92px] shrink-0 flex-col border-r border-border bg-surface px-2 py-4 min-[768px]:w-[220px] min-[768px]:px-3 min-[1280px]:w-[252px]"
+      className="flex h-full w-[64px] shrink-0 flex-col border-r border-border bg-surfaceSubtle px-1.5 py-3 min-[768px]:w-[220px] min-[768px]:px-3 min-[768px]:py-4 min-[1280px]:w-[260px]"
     >
-      <div className="mb-5 flex min-w-0 items-center gap-2 px-1">
-        <div className="grid size-7 shrink-0 place-items-center rounded-md bg-brandSoft text-brand">
-          <MessageSquare aria-hidden="true" size={15} />
+      <div className="mb-4 flex min-w-0 items-center justify-center gap-2 px-0.5 min-[768px]:justify-start min-[768px]:px-1">
+        <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-brandSoft text-brand">
+          <Bot aria-hidden="true" size={16} />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-textPrimary">
+          <h1 className="sr-only text-sm font-semibold text-textPrimary min-[768px]:not-sr-only min-[768px]:truncate">
             Agent
-          </p>
+          </h1>
           <p className="hidden text-xs text-textSecondary min-[768px]:block">
-            个人工作助手
+            个人工作台
           </p>
         </div>
       </div>
 
       <Button
         type="button"
-        size="sm"
+        variant="ghost"
         aria-label="新建会话"
+        title="新建会话"
         onClick={() => void createSession()}
-        className="h-9 w-full shrink-0 px-0 min-[768px]:px-3"
+        className="h-9 w-full shrink-0 justify-center rounded-[10px] px-0 text-textPrimary hover:bg-surface min-[768px]:justify-start min-[768px]:px-2"
       >
-        <Plus aria-hidden="true" size={16} />
+        <SquarePen aria-hidden="true" size={16} />
         <span className="hidden min-[768px]:inline">新建会话</span>
       </Button>
 
-      <nav aria-label="会话列表" className="mt-5 min-h-0 flex-1 overflow-y-auto">
+      <nav
+        aria-label="会话列表"
+        className="mt-4 min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+      >
         <p className="mb-2 hidden px-2 text-[11px] font-medium text-textSecondary min-[768px]:block">
-          最近会话
+          会话
         </p>
         <div className="space-y-1">
           {sessions.map((session) => (
@@ -74,15 +78,20 @@ export function AgentSidebar() {
               to={`/agent/${session.id}`}
               aria-label={session.title}
               className={cn(
-                "block min-w-0 rounded-md px-2 py-2 text-textSecondary transition-colors hover:bg-surfaceSubtle hover:text-textPrimary",
+                "group flex h-10 min-w-0 items-center justify-center gap-2 rounded-[10px] border border-transparent px-1.5 text-textSecondary transition-colors hover:bg-surface hover:text-textPrimary min-[768px]:h-9 min-[768px]:justify-start",
                 session.id === activeSessionId &&
-                  "bg-brandSoft text-brand hover:bg-brandSoft hover:text-brand",
+                  "border-border/70 bg-surface text-textPrimary shadow-sm hover:bg-surface",
               )}
             >
-              <span className="block truncate text-center text-xs font-medium min-[768px]:text-left min-[768px]:text-sm">
+              <MessageSquare
+                aria-hidden="true"
+                size={15}
+                className="shrink-0 opacity-70"
+              />
+              <span className="hidden min-w-0 flex-1 truncate text-left text-sm min-[768px]:block">
                 {session.title}
               </span>
-              <span className="mt-1 hidden text-[11px] text-textSecondary min-[768px]:block">
+              <span className="hidden shrink-0 text-[10px] tabular-nums text-textSecondary min-[768px]:block">
                 {formatSessionTime(session.updatedAt)}
               </span>
             </NavLink>
