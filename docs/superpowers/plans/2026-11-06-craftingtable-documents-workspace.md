@@ -1005,12 +1005,12 @@ func (s *Service) MoveNode(ctx context.Context, input MoveNodeInput) (NodeSummar
 		if parent.Kind != NodeKindFolder {
 			return NodeSummary{}, ErrParentNotFolder
 		}
-		ancestors, err := s.repository.AncestorIDs(ctx, current.ID)
+		ancestors, err := s.repository.AncestorIDs(ctx, *parentID)
 		if err != nil {
 			return NodeSummary{}, err
 		}
 		for _, ancestor := range ancestors {
-			if ancestor == *parentID {
+			if ancestor == current.ID {
 				return NodeSummary{}, ErrInvalidMove
 			}
 		}
@@ -1065,7 +1065,7 @@ func (s *Service) Search(
 		return SearchPage{Items: make([]SearchHit, 0)}, nil
 	}
 
-	cursor, err := DecodeCursor(rawCursor, query)
+	cursor, err := decodeOptionalCursor(rawCursor, query)
 	if err != nil {
 		return SearchPage{}, err
 	}
@@ -1076,6 +1076,14 @@ func (s *Service) Search(
 		Cursor:    cursor,
 		QueryHash: QueryHash(query),
 	})
+}
+
+// decodeOptionalCursor 只在游标非空时解码；首屏查询不带游标。
+func decodeOptionalCursor(raw string, query string) (*SearchCursor, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	return DecodeCursor(raw, query)
 }
 
 func trimmedPointer(value *string) *string {
@@ -1090,7 +1098,7 @@ func trimmedPointer(value *string) *string {
 }
 ```
 
-`search_test.go` 已定义 `stringPointer`，`service_test.go` 再定义会重复。让 `service_test.go` 复用 `stringPointer`，删除该文件末尾的同名函数。实施时按此调整：`service_test.go` 末尾不再声明 `stringPointer`。
+`search_test.go` 没有定义 `stringPointer`，因此 `service_test.go` 末尾保留计划中给出的 `stringPointer` 声明。
 
 - [ ] **Step 4: 运行测试确认通过**
 
@@ -1110,7 +1118,7 @@ git commit -m "feat: add document domain service validation"
 
 **Files:**
 - Create: `server/internal/platform/store/doc_node_store.go`
-- Test: `tests/e2e/unit/store/doc_node_store_test.go`
+- Test: `server/internal/platform/store/doc_node_store_test.go`
 
 **Interfaces:**
 - Consumes: `docs.Node`、`docs.NodeSummary`、`docs.CreateNodeInput`、`docs.RenameNodeInput`、`docs.MoveNodeInput`、`docs.SaveContentInput`、`docs.ErrNodeNotFound`；`store.SQLiteStore` 的 `db`、`newID()`、`nullableValue()`、`stringPointer()`
@@ -1118,7 +1126,7 @@ git commit -m "feat: add document domain service validation"
 
 - [ ] **Step 1: 写失败测试**
 
-创建 `tests/e2e/unit/store/doc_node_store_test.go`：
+创建 `server/internal/platform/store/doc_node_store_test.go`：
 
 ```go
 package store_test
@@ -1320,7 +1328,7 @@ func TestDocNodeStoreSavesContentAndSoftDeletesSubtree(t *testing.T) {
 
 - [ ] **Step 2: 运行测试确认失败**
 
-Run: `go test ./tests/e2e/unit/store/ -run TestDocNodeStore -v`
+Run: `go test ./server/internal/platform/store/ -run TestDocNodeStore -v`
 Expected: FAIL，`opened.CreateNode undefined`
 
 - [ ] **Step 3: 实现节点读写**
@@ -1716,13 +1724,13 @@ func scanNode(scanner rowScanner) (docs.Node, error) {
 
 - [ ] **Step 4: 运行测试确认通过**
 
-Run: `go test ./tests/e2e/unit/store/ -run TestDocNodeStore -v`
+Run: `go test ./server/internal/platform/store/ -run TestDocNodeStore -v`
 Expected: PASS
 
 - [ ] **Step 5: 提交**
 
 ```bash
-git add server/internal/platform/store/doc_node_store.go tests/e2e/unit/store/doc_node_store_test.go
+git add server/internal/platform/store/doc_node_store.go server/internal/platform/store/doc_node_store_test.go
 git commit -m "feat: persist document nodes in sqlite"
 ```
 
@@ -1732,7 +1740,7 @@ git commit -m "feat: persist document nodes in sqlite"
 
 **Files:**
 - Create: `server/internal/platform/store/doc_search_store.go`
-- Test: `tests/e2e/unit/store/doc_search_store_test.go`
+- Test: `server/internal/platform/store/doc_search_store_test.go`
 
 **Interfaces:**
 - Consumes: `docs.SearchInput{Query, Limit, Cursor, QueryHash}`（`Query` 已由 `LikePattern` 转义）、`docs.SearchPage`、`docs.SearchHit`、`docs.QueryHash`、`docs.EncodeCursor`
@@ -1740,7 +1748,7 @@ git commit -m "feat: persist document nodes in sqlite"
 
 - [ ] **Step 1: 写失败测试**
 
-创建 `tests/e2e/unit/store/doc_search_store_test.go`：
+创建 `server/internal/platform/store/doc_search_store_test.go`：
 
 ```go
 package store_test
@@ -1902,7 +1910,7 @@ func TestDocSearchStoreSkipsDeletedNodes(t *testing.T) {
 
 - [ ] **Step 2: 运行测试确认失败**
 
-Run: `go test ./tests/e2e/unit/store/ -run TestDocSearchStore -v`
+Run: `go test ./server/internal/platform/store/ -run TestDocSearchStore -v`
 Expected: FAIL，`opened.Search undefined`
 
 - [ ] **Step 3: 实现搜索**
@@ -1940,10 +1948,10 @@ func (s *SQLiteStore) Search(
 		ctx,
 		`WITH ranked AS (
 		   SELECT id, parent_id, kind, title, updated_at,
-		          CASE WHEN lower(title) LIKE lower(?) ESCAPE '\' THEN 0 ELSE 1 END AS rank
+		          CASE WHEN lower(title) LIKE lower(?) || '%' ESCAPE '\' THEN 0 ELSE 1 END AS rank
 		   FROM doc_nodes
 		   WHERE deleted_at IS NULL
-		     AND lower(title) LIKE lower(?) ESCAPE '\'
+		     AND lower(title) LIKE '%' || lower(?) || '%' ESCAPE '\'
 		 ),
 		 page AS (
 		   SELECT * FROM ranked
@@ -2024,7 +2032,9 @@ func (s *SQLiteStore) Search(
 		return docs.SearchPage{}, err
 	}
 	for index := range page.Items {
-		page.Items[index].Path = paths[page.Items[index].ID]
+		if path, ok := paths[page.Items[index].ID]; ok {
+			page.Items[index].Path = path
+		}
 	}
 	return page, nil
 }
@@ -2052,10 +2062,10 @@ func (s *SQLiteStore) docAncestorPaths(
 		ctx,
 		`WITH RECURSIVE seed(node_id) AS (VALUES `+values+`),
 		 chain(node_id, id, title, parent_id, depth) AS (
-		   SELECT seed.node_id, node.id, node.title, node.parent_id, 1
+		   SELECT seed.node_id, parent.id, parent.title, parent.parent_id, 1
 		   FROM seed
 		   JOIN doc_nodes node ON node.id = seed.node_id
-		   WHERE node.parent_id IS NOT NULL
+		   JOIN doc_nodes parent ON parent.id = node.parent_id
 		   UNION ALL
 		   SELECT chain.node_id, parent.id, parent.title, parent.parent_id, chain.depth + 1
 		   FROM doc_nodes parent
@@ -2092,13 +2102,13 @@ func (s *SQLiteStore) docAncestorPaths(
 
 - [ ] **Step 4: 运行测试确认通过**
 
-Run: `go test ./tests/e2e/unit/store/ -run TestDocSearchStore -v`
+Run: `go test ./server/internal/platform/store/ -run TestDocSearchStore -v`
 Expected: PASS
 
 - [ ] **Step 5: 提交**
 
 ```bash
-git add server/internal/platform/store/doc_search_store.go tests/e2e/unit/store/doc_search_store_test.go
+git add server/internal/platform/store/doc_search_store.go server/internal/platform/store/doc_search_store_test.go
 git commit -m "feat: search document nodes by title"
 ```
 
@@ -5509,6 +5519,6 @@ git commit -m "docs: record documents workspace implementation"
 **已知需要在实施中遵守的约定**
 
 1. `docs.SearchInput` 包含 `QueryHash string`，由 `Service.Search` 用原始查询词填充；`store` 只负责把它写进游标。
-2. `service_test.go` 复用 `search_test.go` 的 `stringPointer`，不要重复声明。
+2. `service_test.go` 末尾自带 `stringPointer`，`search_test.go` 没有同名函数，不会冲突。
 3. `DocTree` 的行渲染已包含操作入口，不再单独创建 `docTreeItem.tsx`。
 4. `DocSidebar` 中的 `setSearchQueryAndTree` 仅用于刷新树，实施时内联为 `void effect.loadTree()`。
