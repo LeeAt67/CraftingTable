@@ -16,7 +16,7 @@
 - API success responses remain `{ "data": ... }`.
 - API failures remain `{ "error": { code, kind, message, retryable, ... } }`.
 - Agent SSE is a project-owned subset of UI Message Stream. Follow [Agent 设计 11.1](../specs/2026-11-05-craftingtable-agent-design.md#111-协议选择与三层-pipe-through) for the current contract.
-- Treat Vercel AI SDK, `mimo-chat`, and `aisdk-go` as design and test references. Do not import their business layers or complete Agent architecture.
+- Treat Vercel AI SDK, the internal reference project, and `aisdk-go` as design and test references. Do not import their business layers or complete Agent architecture.
 - Use generic packages only for single-purpose infrastructure. `eventsource-parser` may clean SSE; project-owned Adapters must map protocol events and domain state.
 - Do not add a general-purpose frontend SSE parser or a third-party message Store.
 - Domain errors are values checked with `errors.Is` or `errors.As`; handlers never branch on error strings.

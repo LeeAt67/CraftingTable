@@ -183,7 +183,7 @@ LLM Token
 | UI 消息流协议 | `UI Message Stream` | Vercel AI SDK 定义的前端消息流协议，不是 OpenAI 官方协议；CraftingTable 输出兼容子集。 |
 | 默认聊天传输器 | `DefaultChatTransport` | AI SDK 的 HTTP Transport 实现，只作为 `agentTransport.ts` 的设计参考，不进入生产依赖。 |
 | UI 消息流读取器 | `readUIMessageStream` | AI SDK 把消息块归并为 UI 消息快照的函数，只作为协议研究参考，不进入生产依赖。 |
-| 产品链路参考 | `mimo-chat` | 参考其传输、协议 Adapter 和状态写入分离方式；不复制其目录、业务层或 Agent 编排。 |
+| 产品链路参考 | 参考项目 | 参考其传输、协议 Adapter 和状态写入分离方式；不复制其目录、业务层或 Agent 编排。 |
 | Go 流实现参考 | `aisdk-go` | Go 社区对 AI SDK 流的实现，只作为协议对照；不进入生产依赖。 |
 | SSE 清理依赖 | `eventsource-parser` | 允许直接依赖的通用 SSE 解析包，由项目 Adapter 调用。 |
 | 通用工具依赖 | `lodash` | 允许直接依赖的通用数据工具库，不承载业务语义。 |

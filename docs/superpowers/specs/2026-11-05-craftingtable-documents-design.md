@@ -21,7 +21,7 @@
 关键决策：
 
 - 目录节点用**单表 `doc_nodes`** 承载文件夹与文档，以 `kind` 区分，`parent_id` 自引用。表结构从第一天支持任意层级，UI 首版只呈现两级。
-- 正文以 **Markdown 字符串**保存（`content` 字段），编辑器使用 Tiptap 3 + 官方 `@tiptap/markdown`，载入用 `contentType: 'markdown'`，保存用 `editor.getMarkdown()`。与 mico 的既有结论保持一致：Markdown 是唯一事实源，不保留 HTML 中间态。
+- 正文以 **Markdown 字符串**保存（`content` 字段），编辑器使用 Tiptap 3 + 官方 `@tiptap/markdown`，载入用 `contentType: 'markdown'`，保存用 `editor.getMarkdown()`。与参考项目的既有结论保持一致：Markdown 是唯一事实源，不保留 HTML 中间态。
 - 正文只存 SQLite。导入导出走浏览器 File API，服务端不实现文件系统读写。
 - 搜索走**服务端接口**，不采用前端过滤，为后续 PostgreSQL 全文检索预留稳定契约。
 - 删除为软删除（`deleted_at`），首版不提供回收站界面。
@@ -361,7 +361,7 @@ type DocsState = {
 
 选型依据：
 
-1. mico 在生产中使用同一组合并将 Markdown 作为唯一事实源，双向转换链已验证。
+1. 参考项目中该组合已在生产使用，并将 Markdown 作为唯一事实源，双向转换链已验证。
 2. 只读渲染不引入 `react-markdown`，因为本期不做预览模式。
 3. 工具栏使用 `@tiptap/react/menus` 的 `BubbleMenu`（已确认该 subpath 存在），不手写浮层定位。
 4. 不引入 Mantine、BlockNote 等携带自有设计系统的编辑器，避免与 `tokens.css` 形成双轨。
@@ -402,7 +402,7 @@ idle -> saving -> saved
 
 要求：
 
-1. `保存中…` 提示至少显示 500ms，避免闪烁（沿用 mico 的经验值）。
+1. `保存中…` 提示至少显示 500ms，避免闪烁（沿用参考项目验证过的经验值）。
 2. 保存失败时保留草稿在 Store 中，并显示「保存失败，点击重试」。
 3. 保存请求携带最后一次编辑的 `content` 快照，响应返回 `updatedAt` 后更新树顺序。
 4. 切换文档前必须 flush；若 flush 失败，阻止切换并提示。

@@ -68,7 +68,7 @@ CraftingTable 采用“**目标架构完整采用，系统能力渐进落地**�
 - 包可以锁定版本，许可证清晰，并能在 Adapter 边界替换。
 - 升级时可以用项目测试验证行为，不依赖人工观察。
 
-例如 `eventsource-parser` 和 `lodash` 可以直接使用。Vercel AI SDK、`mimo-chat` 等包含完整产品链路或 Agent 协议设计的项目，应作为参考基线，通过研究记录、设计对比和项目内 Adapter 吸收，不直接粘贴其业务实现。这里的“直接使用”只适用于不会成为本项目业务状态、领域协议或 Agent 架构事实源的工具包。
+例如 `eventsource-parser` 和 `lodash` 可以直接使用。Vercel AI SDK、内部参考项目等包含完整产品链路或 Agent 协议设计的项目，应作为参考基线，通过研究记录、设计对比和项目内 Adapter 吸收，不直接粘贴其业务实现。这里的“直接使用”只适用于不会成为本项目业务状态、领域协议或 Agent 架构事实源的工具包。
 
 ## 3. 目标与非目标
 
@@ -273,7 +273,7 @@ Agent 的执行生命周期不能绑定到一次 HTTP 连接：
 
 ### 6.1 流协议与第三方依赖
 
-Agent 前端吸收 Vercel AI SDK 和 `mimo-chat` 的分层方法。Vercel AI SDK、`mimo-chat` 和 `aisdk-go` 不进入生产依赖，也不直接移植其对话层或业务层。完整协议和职责表以 [Agent 设计 11.1](./2026-11-05-craftingtable-agent-design.md#111-协议选择与三层-pipe-through) 为准。
+Agent 前端吸收 Vercel AI SDK 和内部参考项目的分层方法。Vercel AI SDK、内部参考项目和 `aisdk-go` 不进入生产依赖，也不直接移植其对话层或业务层。完整协议和职责表以 [Agent 设计 11.1](./2026-11-05-craftingtable-agent-design.md#111-协议选择与三层-pipe-through) 为准。
 
 固定链路：
 
@@ -300,7 +300,7 @@ Agent 前端吸收 Vercel AI SDK 和 `mimo-chat` 的分层方法。Vercel AI SDK
 当前实现基线：
 
 - 前端直接依赖 `eventsource-parser`，只使用其 SSE 清理能力。
-- `agentTransport.ts`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 由项目维护，吸收 Vercel AI SDK 与 `mimo-chat` 的分层方法。
+- `agentTransport.ts`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 由项目维护，吸收 Vercel AI SDK 与内部参考项目的分层方法。
 - Go 侧在 `server/internal/agent/access` 中实现最小的 UI Message Stream 编码，不直接依赖完整 AI SDK 类库。
 - Vercel AI SDK、`coder/aisdk-go` 和 `nmn28/aisdk-go` 仅作为协议研究与测试对照，不进入生产依赖。
 
@@ -631,6 +631,13 @@ Playwright 配置必须同时收集 `**/*.e2e.ts` 和 `**/*.desktop.ts`。浏览
 - 修改 UI Token 时同步更新原型、主题测试和 Token 文档。
 - 文档中的本地链接必须可访问。
 - 根级 `AGENTS.md` 只索引规则，不复制整份规范。
+
+### 14.4 措辞约束
+
+- 设计与计划文档中不得出现内部项目代号，统一写作「参考项目」或「内部参考项目」。
+- 上游模型供应商与模型名不进文档，统一写作「上游模型」，具体取值由环境变量决定。
+- 提交信息同样遵守上述约束；已提交但违反约束的提交信息应重写，不保留历史泄漏。
+- 该约束适用于 `docs/`、`README.md` 和提交信息，不适用于外部依赖包的名称与 URL。
 
 ## 15. 质量门禁
 

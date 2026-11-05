@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stream MiMo `reasoning_content` into its own persisted MessagePart, recover it after reload, and show it above the answer in a collapsible "思考中..." panel.
+**Goal:** Stream the upstream model's `reasoning_content` into its own persisted MessagePart, recover it after reload, and show it above the answer in a collapsible "思考中..." panel.
 
 **Architecture:** The Provider Parser turns `delta.reasoning_content` into a `reasoning` event; the Run Coordinator emits `reasoning-start`/`reasoning-delta`/`reasoning-end` chunks before `text-start`; the Event Journal keeps reasoning and text in separate buffers; Finalize writes both Parts in one transaction and deletes an empty reasoning Part. React maps the new stream events onto a `reasoning` Part through the existing Materializer and renders it above the text Part.
 
@@ -3299,7 +3299,7 @@ Create `docs/handoffs/2026-11-05-craftingtable-agent-reasoning-handoff.md`:
 
 ## 1. 结论
 
-- MiMo 的 `delta.reasoning_content` 与 `delta.content` 现在分别写入两个 MessagePart。
+- 上游模型的 `delta.reasoning_content` 与 `delta.content` 现在分别写入两个 MessagePart。
 - Part 顺序固定为 `reasoning: 0`、`text: 1`、`error` 从 2 开始。
 - 推理阶段默认展开，首个正文增量到达后自动折叠。
 - 用户手动切换后，自动规则不再覆盖。
@@ -3310,7 +3310,7 @@ Create `docs/handoffs/2026-11-05-craftingtable-agent-reasoning-handoff.md`:
 ## 2. 协议
 
 ```text
-MiMo delta.reasoning_content
+上游模型 delta.reasoning_content
   -> Go "reasoning" provider event
   -> StreamReasoningStart / StreamReasoningDelta / StreamReasoningEnd
   -> UI Message Stream reasoning-start / reasoning-delta / reasoning-end

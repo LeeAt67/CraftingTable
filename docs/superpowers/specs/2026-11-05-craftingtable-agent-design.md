@@ -968,7 +968,7 @@ type AgentActiveRun = {
 
 ### 11.1 协议选择与三层 pipe-through
 
-Go 服务端输出兼容 UI Message Stream 的 SSE。协议结构参考 Vercel AI SDK，分层方式同时参考 `mimo-chat`；前端不直接依赖 `ai` 或 `@ai-sdk/react`。
+Go 服务端输出兼容 UI Message Stream 的 SSE。协议结构参考 Vercel AI SDK，分层方式同时参考内部参考项目；前端不直接依赖 `ai` 或 `@ai-sdk/react`。
 
 协议内部使用显式状态机和纯 Reducer，详见 [Agent 流协议状态机设计](./2026-11-05-craftingtable-agent-stream-state-machine-design.md)。该设计只改变协议层内部结构，不改变公开事件和 Store 所有权。
 
@@ -1025,7 +1025,7 @@ Response.body
 - [DefaultChatTransport](https://github.com/vercel/ai/blob/main/packages/ai/src/ui/default-chat-transport.ts)
 - [HttpChatTransport](https://github.com/vercel/ai/blob/main/packages/ai/src/ui/http-chat-transport.ts)
 - [readUIMessageStream](https://github.com/vercel/ai/blob/main/packages/ai/src/ui-message-stream/read-ui-message-stream.ts)
-- [mimo-chat 协议分层](https://github.com/xiaomi/mimo-chat) 的传输、协议 Adapter 和状态写入分离方式。
+- 参考项目的协议分层：传输、协议 Adapter 和状态写入分离方式。
 
 这些仓库只作为设计和测试对照。升级协议前先更新 fixture，再运行前端 Adapter、Go 集成测试和浏览器 E2E。
 

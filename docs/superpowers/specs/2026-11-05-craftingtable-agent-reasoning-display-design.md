@@ -2,7 +2,7 @@
 
 - **Status:** Draft for review
 - **Date:** 2026-11-05
-- **Scope:** MiMo reasoning 内容的流式接收、持久化、恢复和折叠展示
+- **Scope:** 上游模型 reasoning 内容的流式接收、持久化、恢复和折叠展示
 - **Depends on:** [Agent 设计](./2026-11-05-craftingtable-agent-design.md)、[持久化与恢复设计](./2026-11-05-craftingtable-agent-persistence-recovery-design.md)
 
 ## 1. 决策摘要
@@ -19,7 +19,7 @@ assistant message
 采用以下链路：
 
 ```text
-MiMo delta.reasoning_content
+上游模型 delta.reasoning_content
   -> Go StreamChunk
   -> reasoning-start / reasoning-delta / reasoning-end
   -> 前端 reasoning MessagePart
@@ -49,11 +49,11 @@ MiMo delta.reasoning_content
 6. 前端 Materializer 只维护正文 Part。
 7. 当前“正在思考…”只是没有可见 Part 时的占位文案，不是真实 reasoning。
 
-当前 MiMo 模型会返回真实 reasoning 内容，因此问题不在模型，而在完整的接入管线缺失。
+当前上游模型会返回真实 reasoning 内容，因此问题不在模型，而在完整的接入管线缺失。
 
 ## 3. 上游事实
 
-当前配置使用 `xiaomi/mimo-v2.6-pro`。针对现有网关的验证结果：
+当前配置的上游模型由 `CRAFTINGTABLE_AGENT_MODEL` 指定，并会返回 `reasoning_content`。针对现有网关的验证结果：
 
 - 非流式响应存在 `choices[0].message.reasoning_content`。
 - 流式响应存在 `choices[0].delta.reasoning_content`。
@@ -64,7 +64,7 @@ MiMo delta.reasoning_content
 
 ## 4. 目标
 
-- 实时接收并展示 MiMo 返回的 reasoning。
+- 实时接收并展示上游模型返回的 reasoning。
 - reasoning 与最终正文在协议、存储和 UI 中完全分离。
 - 支持刷新、重连和重新打开会话后的 reasoning 恢复。
 - 提供可访问、可折叠且不会打断阅读的 reasoning 面板。
@@ -595,11 +595,11 @@ Reasoning 面板位于最终正文上方，与正文属于同一条 assistant Me
 7. 重新打开旧会话可展开 reasoning。
 8. 无 reasoning 时不显示面板。
 
-自动化测试使用 mock SSE，不依赖真实 API Key。实现完成后使用当前 MiMo 做一次人工联调。
+自动化测试使用 mock SSE，不依赖真实 API Key。实现完成后使用当前配置的上游模型做一次人工联调。
 
 ## 16. 验收标准
 
-- 当前 MiMo 返回的 `reasoning_content` 能在正文上方显示。
+- 当前上游模型返回的 `reasoning_content` 能在正文上方显示。
 - Reasoning 和正文在数据库中是两个独立 Part。
 - 生成中刷新后可以继续看到 reasoning。
 - 完成后刷新仍可查看 reasoning。

@@ -40,7 +40,7 @@ Agent 的 Session、Message、Part、Run 和生命周期事件保存在本地 SQ
 - Agent：单 Agent 起步，预留工具、Skills、MCP、多 Agent 和评测扩展点。
 - 架构采用策略：目标架构完整采用，系统能力渐进落地；规范不因 MVP 缩水，也不提前复制外部项目的全部技术栈和进程拓扑。
 - 前端 Model 边界返回 `Result<T>`，Zustand 是业务状态唯一事实源。
-- 开源项目采用原则：Vercel AI SDK、`mimo-chat` 和 `aisdk-go` 只作为设计与测试参考，不进入生产依赖。吸收后的实现必须用 CraftingTable 自己的类型、错误模型、Adapter 和测试重新表达，不直接移植其对话层、业务层或完整 Agent 架构。
+- 开源项目采用原则：Vercel AI SDK、内部参考项目和 `aisdk-go` 只作为设计与测试参考，不进入生产依赖。吸收后的实现必须用 CraftingTable 自己的类型、错误模型、Adapter 和测试重新表达，不直接移植其对话层、业务层或完整 Agent 架构。
 - 只有职责单一且不拥有业务语义的通用工具包可以直接依赖，例如 `eventsource-parser` 用于 SSE 清理、`lodash` 用于通用数据操作。项目自己维护 HTTP Transport、协议子集映射和领域消息 Adapter。
 - Agent 前端由 `agentTransport.ts`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 分层处理流；`eventsource-parser` 只负责 SSE 分帧，不承担消息状态或领域语义。
 - 开发流程遵循 SDD：先更新设计与实施计划，再写失败测试和最小实现；未完成文档评审的变更不进入生产代码。
