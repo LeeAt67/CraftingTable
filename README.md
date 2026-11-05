@@ -28,6 +28,7 @@ Agent 的 Session、Message、Part、Run 和生命周期事件保存在本地 SQ
 - [Agent 流协议状态机设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-stream-state-machine-design.md)
 - [Agent 架构图](docs/architecture/README.md)
 - [非 Agent 需求提案](docs/superpowers/specs/2026-11-05-craftingtable-non-agent-requirements.md)
+- [今日服务端设计（非 Agent）](docs/superpowers/specs/2026-11-05-craftingtable-today-server-design.md)
 - [早期个人工作台设计（已取代）](docs/superpowers/specs/2026-11-04-leeat-personal-workbench-design.md)
 - [旧 Agent 工作区设计（已取代）](docs/superpowers/specs/20261104LeeatAgentWorkspaceDesign.md)
 
