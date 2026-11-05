@@ -1,4 +1,5 @@
 import { renderHook, waitFor } from "@testing-library/react";
+import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createAgentEffect,
@@ -8,16 +9,49 @@ import {
   resetAgentStore,
   useAgentStore,
 } from "@/controllers/stores/agentStore";
+import type { AgentError } from "@/models/agentContracts";
 import type { AgentModel } from "@/models/agentModel";
 import { createFakeAgentModel } from "@/models/fakeAgentModel";
 
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
 describe("AgentEffect", () => {
-  beforeEach(resetAgentStore);
+  beforeEach(() => {
+    resetAgentStore();
+    vi.clearAllMocks();
+  });
+
+  it("keeps agent errors inline without emitting a duplicate toast", async () => {
+    const failure = {
+      code: "AGENT_PROVIDER_FAILED",
+      kind: "server",
+      message: "模型服务请求失败",
+      retryable: true,
+    } satisfies AgentError;
+    const model: AgentModel = {
+      ...createFakeAgentModel({ chunkDelayMs: 0 }),
+      listSessions: async () => [null, failure],
+    };
+    const effect = createAgentEffect(model);
+
+    const [sessions, error] = await effect.loadSessions();
+
+    expect(sessions).toBeNull();
+    expect(error).toEqual(failure);
+    expect(useAgentStore.getState().error).toEqual(failure);
+    expect(useAgentStore.getState().sendPhase).toBe("error");
+    expect(toast.error).not.toHaveBeenCalled();
+  });
 
   it("creates a session, sends a message and writes snapshots to the Store", async () => {
     const effect = createAgentEffect(
       createFakeAgentModel({ chunkDelayMs: 0 }),
-      { success: () => undefined, error: () => undefined },
+      { success: () => undefined },
     );
 
     const [created, createError] = await effect.createSession();
@@ -41,7 +75,7 @@ describe("AgentEffect", () => {
   it("keeps the live run when another session is opened", async () => {
     const effect = createAgentEffect(
       createFakeAgentModel({ chunkDelayMs: 1000 }),
-      { success: () => undefined, error: () => undefined },
+      { success: () => undefined },
     );
     const [sessionA] = await effect.createSession();
     useAgentStore.getState().setActiveSession(sessionA!.session.id);
@@ -76,7 +110,6 @@ describe("AgentEffect", () => {
     };
     const effect = createAgentEffect(model, {
       success: () => undefined,
-      error: () => undefined,
     });
 
     const loadingA = effect.loadSession(sessionA!.session.id);
@@ -137,7 +170,6 @@ describe("AgentEffect", () => {
     };
     const effect = createAgentEffect(model, {
       success: () => undefined,
-      error: () => undefined,
     });
     const [created] = await effect.createSession();
     useAgentStore.getState().setActiveSession(created!.session.id);
@@ -172,7 +204,7 @@ describe("AgentEffect", () => {
           yield "重试后的回复";
         },
       }),
-      { success: () => undefined, error: () => undefined },
+      { success: () => undefined },
     );
     const [created] = await effect.createSession();
     useAgentStore.getState().setActiveSession(created!.session.id);

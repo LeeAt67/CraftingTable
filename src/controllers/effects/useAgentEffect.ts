@@ -15,12 +15,10 @@ import type { AgentModel } from "@/models/agentModel";
 
 type Notifier = {
   success: (message: string) => void;
-  error: (message: string) => void;
 };
 
 const defaultNotifier: Notifier = {
   success: (message) => toast.success(message),
-  error: (message) => toast.error(message),
 };
 
 function createId() {
@@ -70,7 +68,6 @@ export function createAgentEffect(
   const reportFailure = (error: AgentError) => {
     useAgentStore.getState().setError(error);
     useAgentStore.getState().setSendPhase("error");
-    notifier.error(error.message);
   };
 
   const loadSessions = async () => {
