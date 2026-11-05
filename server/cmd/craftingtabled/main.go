@@ -20,6 +20,7 @@ import (
 	"github.com/leeat/craftingtable/server/internal/agent/access"
 	"github.com/leeat/craftingtable/server/internal/agent/core"
 	"github.com/leeat/craftingtable/server/internal/agent/provider"
+	"github.com/leeat/craftingtable/server/internal/docs"
 	"github.com/leeat/craftingtable/server/internal/platform/config"
 	"github.com/leeat/craftingtable/server/internal/platform/httpapi"
 	"github.com/leeat/craftingtable/server/internal/platform/store"
@@ -103,6 +104,7 @@ func run() error {
 
 	router := httpapi.NewRouter(logger)
 	today.NewController(sqliteStore, logger).Register(router)
+	docs.NewController(sqliteStore, logger).Register(router)
 	access.NewSessionController(agentService, logger).Register(router)
 	streamHeartbeat, err := resolveAgentStreamHeartbeat()
 	if err != nil {
