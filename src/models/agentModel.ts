@@ -1,6 +1,7 @@
 import type {
   AgentRunStatus,
   AgentRetryInput,
+  AgentResumeInput,
   AgentSendHandlers,
   AgentSendInput,
   AgentSendResult,
@@ -25,6 +26,10 @@ export type AgentModel = {
     input: AgentRetryInput,
     handlers: AgentSendHandlers,
   ) => Promise<Result<AgentSendResult>>;
+  resumeRun: (
+    input: AgentResumeInput,
+    handlers: AgentSendHandlers,
+  ) => Promise<Result<AgentSendResult>>;
   cancelRun: (input: {
     sessionId: string;
     runId: string;
@@ -44,6 +49,7 @@ const notConfiguredAgentModel: AgentModel = {
   createSession: async () => [null, notConfiguredError],
   sendMessage: async () => [null, notConfiguredError],
   retryMessage: async () => [null, notConfiguredError],
+  resumeRun: async () => [null, notConfiguredError],
   cancelRun: async () => [null, notConfiguredError],
 };
 

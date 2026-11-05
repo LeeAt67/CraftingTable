@@ -376,7 +376,13 @@ export function createFakeAgentModel(
         session: { ...session },
         messages,
         messageParts,
-        activeRun: run ? { runId: run.runId, status: run.status } : null,
+        activeRun: run
+          ? {
+              runId: run.runId,
+              status: run.status,
+              lastSequence: 0,
+            }
+          : null,
         nextMessageCursor: null,
       };
       return [detail, null];
@@ -538,6 +544,45 @@ export function createFakeAgentModel(
         signal: input.signal,
         handlers,
       });
+    },
+
+    async resumeRun(input, handlers) {
+      const [detail, detailError] = await model.getSession(input.sessionId);
+      if (detailError) {
+        return [null, detailError];
+      }
+      const message = detail.messages.find(
+        (candidate) =>
+          candidate.role === "assistant" &&
+          candidate.activeRunId === input.runId,
+      );
+      if (!message) {
+        return failure(
+          "AGENT_RUN_NOT_FOUND",
+          "not_found",
+          "运行不存在或已结束",
+        );
+      }
+      handlers.onSnapshot({
+        message: cloneMessage(message),
+        parts: detail.messageParts
+          .filter((part) => part.messageId === message.id)
+          .map(clonePart),
+      });
+      const status =
+        message.status === "complete"
+          ? "completed"
+          : message.status === "streaming"
+            ? "running"
+            : message.status;
+      return [
+        {
+          assistantMessageId: message.id,
+          runId: input.runId,
+          status,
+        },
+        null,
+      ];
     },
 
     async cancelRun(input) {

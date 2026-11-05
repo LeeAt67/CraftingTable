@@ -6,9 +6,15 @@ export const agentErrorCodes = [
   "REQUEST_CANCELLED",
   "AGENT_SESSION_NOT_FOUND",
   "AGENT_SESSION_BUSY",
+  "AGENT_IDEMPOTENCY_CONFLICT",
+  "AGENT_PERSISTENCE_FAILED",
   "AGENT_REQUEST_ALREADY_PROCESSED",
   "AGENT_REQUEST_ID_CONFLICT",
   "AGENT_RUN_NOT_FOUND",
+  "AGENT_RUN_START_FAILED",
+  "AGENT_RUN_INTERRUPTED",
+  "AGENT_STREAM_CURSOR_EXPIRED",
+  "AGENT_STREAM_BUFFER_EXCEEDED",
   "AGENT_MESSAGE_NOT_RETRYABLE",
   "AGENT_NOT_CONFIGURED",
   "AGENT_PROVIDER_FAILED",
@@ -144,6 +150,23 @@ export type AgentRunStatus =
   | "cancelled"
   | "interrupted";
 
+export type AgentRunHandle = {
+  runId: string;
+  sessionId: string;
+  userMessageId: string;
+  assistantMessageId: string;
+  assistantPartId: string;
+  status: AgentRunStatus;
+};
+
+export type AgentActiveRun = {
+  runId: string;
+  userMessageId?: string;
+  assistantMessageId?: string;
+  status: AgentRunStatus;
+  lastSequence: number;
+};
+
 export type CraftingTableSendMessage = {
   id: string;
   role: "user";
@@ -167,6 +190,13 @@ export type AgentRetryInput = {
   signal: AbortSignal;
 };
 
+export type AgentResumeInput = {
+  sessionId: string;
+  runId: string;
+  afterSequence: number;
+  signal: AbortSignal;
+};
+
 export type AgentSendResult = {
   assistantMessageId: string;
   runId: string;
@@ -187,9 +217,6 @@ export type AgentSessionDetail = {
   session: AgentSession;
   messages: AgentMessage[];
   messageParts: AgentMessagePart[];
-  activeRun: null | {
-    runId: string;
-    status: AgentRunStatus;
-  };
+  activeRun: AgentActiveRun | null;
   nextMessageCursor: string | null;
 };
