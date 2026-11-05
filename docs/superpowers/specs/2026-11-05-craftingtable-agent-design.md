@@ -23,7 +23,7 @@ CraftingTable Agent 是工作台中的个人助手，不是独立聊天产品的
 - token 增量为什么不能逐条写数据库。
 - 每个消息片段如何归属到正确的消息和会话。
 - 用户取消、模型失败、浏览器断线和进程重启后是什么状态。
-- Vercel AI SDK 只承担传输与解析时，如何避免状态双源。
+- 吸收 Vercel AI SDK 的传输与解析分层时，如何避免状态双源。
 - 后续工具、Skills、MCP 和多 Agent 如何接入而不重写前端。
 
 ## 2. Agent Runtime 的含义
@@ -68,7 +68,7 @@ CraftingTable Agent 是工作台中的个人助手，不是独立聊天产品的
 - 刷新后恢复数据库已经提交的消息内容，并识别仍在服务端运行的 Run。
 - 支持停止生成。
 - 支持失败或中断后的手动重试。
-- 前端使用 Vercel AI SDK 的 Transport 和 UI Message Stream 读取能力。
+- 前端吸收 Vercel AI SDK 的三层 pipe-through 思路，由项目自有 `agentTransport.ts`、`eventsource-parser`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 处理流；生产不依赖 `ai` 或 `@ai-sdk/react`，也不自建通用 SSE 分词器。
 - 前端不以 `useChat` 作为业务状态源。
 - 服务端使用 Go 模块化单体。
 - 保持 Light / Dark、响应式布局和无障碍。
@@ -159,8 +159,8 @@ Agent 页面使用两级侧边栏：
 │ View --读取--> AgentStore                                    │
 │   |                                                         │
 │   +--动作--> AgentEffect --> AgentModel                     │
-│                 |             -> DefaultChatTransport       │
-│                 |             -> readUIMessageStream        │
+│                 |             -> AgentTransport             │
+│                 |             -> AgentStreamProtocol        │
 │                 +--同步写入--> AgentStore                    │
 └──────────────────────────────┬──────────────────────────────┘
                                │ HTTP + SSE
@@ -176,7 +176,7 @@ Agent 页面使用两级侧边栏：
 │              -> Model Provider Adapter                      │
 │                                                             │
 │ HTTP Handler -> Live Event Subscriber                       │
-│ Agent Stream View -> AI SDK UI Message Stream SSE           │
+│ Agent Stream View -> UI Message Stream-compatible SSE       │
 └──────────────────────────────┬──────────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────────┐
@@ -244,7 +244,7 @@ Desktop 的 Renderer 不持有 sidecar 端口和 Token。`AgentModel` 接收一�
 
 - Web：适配器直接使用全局 `fetch` 调用同源 `/api/v1`。
 - Desktop：适配器通过窄范围 preload IPC 创建 `MessagePort`，由主进程请求已登记的 sidecar 路径。
-- 两者都返回标准 `Response`；`DefaultChatTransport` 读取 `response.body` 后负责生成 `ReadableStream<UIMessageChunk>`，不能把 fetch 适配器的返回类型写成裸 chunk 流。
+- 两者都返回标准 `Response`；`agentTransport.ts` 只读取状态并返回 `response.body`，不能把 fetch 适配器的返回类型写成领域消息。
 
 主进程只代理已登记的 Agent 路径和请求方法，不接受任意 URL。`AbortSignal` 不能被 IPC 或 `MessagePort` 直接结构化克隆，因此只存在于 Renderer 的 fetch 适配器内部；跨进程取消必须编码成帧。桥接协议固定为：
 
@@ -964,28 +964,87 @@ type AgentActiveRun = {
 
 ## 11. 流式协议
 
-### 11.1 协议选择
+### 11.1 协议选择与三层 pipe-through
 
-Go 服务端输出兼容 Vercel AI SDK UI Message Stream 的 SSE。
+Go 服务端输出兼容 UI Message Stream 的 SSE。协议结构参考 Vercel AI SDK，分层方式同时参考 `mimo-chat`；前端不直接依赖 `ai` 或 `@ai-sdk/react`。
 
-前端使用：
+协议内部使用显式状态机和纯 Reducer，详见 [Agent 流协议状态机设计](./2026-11-05-craftingtable-agent-stream-state-machine-design.md)。该设计只改变协议层内部结构，不改变公开事件和 Store 所有权。
 
-- `DefaultChatTransport` 发起请求并读取 `ReadableStream<UIMessageChunk>`。
-- `readUIMessageStream` 将 chunk 流转换成连续的 `UIMessage` 快照。
-- CraftingTable 自己的适配器把 `UIMessage` 映射为 `AgentMessage` 和 `AgentMessagePart`。
+吸收的重点是以下三个边界：
 
-前端不使用 `useChat`，避免 AI SDK 内部消息状态与 Zustand 形成双源。
+- 请求传输与协议解析分离。
+- 原始 SSE 由通用解析包清理，业务代码只处理需要的 chunk。
+- 消息状态继续由 Zustand 和现有模型逻辑持有，不引入第二个消息状态源。
 
-`DefaultChatTransport` 通过 `prepareSendMessagesRequest` 把 AI SDK 的发送参数映射为 CraftingTable 请求体：
+前端固定链路：
+
+| 层 | 输入 | 负责方 | 输出 | CraftingTable 责任 |
+| --- | --- | --- | --- | --- |
+| 1. HTTP 传输 | Agent 请求 | `agentTransport.ts` | 标准 `Response` | 请求映射、非 2xx 错误 envelope、平台 fetch 注入 |
+| 2. Wire 解码 | HTTP 字节流 | `agentStreamProtocol.ts` 与 `eventsource-parser` | `AsyncIterable<AgentStreamEvent>` | 清理 SSE、解析本项目需要的 chunk、稳定错误映射 |
+| 3. 领域适配 | `AgentStreamEvent` | `apiAgentModel.ts` 与消息状态逻辑 | `AgentMessageSnapshot` | 文本增量、完成状态、错误片段和会话归属 |
+
+```text
+Response.body
+  -> agentTransport.ts
+  -> eventsource-parser
+  -> agentStreamProtocol.ts
+  -> AgentStreamEvent
+  -> apiAgentModel.ts
+  -> AgentMessage + AgentMessagePart
+  -> AgentEffect
+  -> Zustand
+```
+
+项目内模块的职责：
+
+- `agentTransport.ts` 负责发送 `sessionId`、`clientRequestId`、消息关联 ID 和上下文。
+- `agentStreamProtocol.ts` 负责识别 `text-delta`、`finish` 和 `error`。
+- `apiAgentModel.ts` 负责把事件转换为现有消息快照，不把 `AgentStreamEvent` 写入 Store。
+- Web 使用同源 fetch，Desktop 使用注入的受控 fetch 适配器。
+- HTTP、协议和 Schema 错误统一转换为 `Result<T>`。
+
+`eventsource-parser` 属于允许直接使用的通用工具包。以下内容属于项目协议和业务语义，必须在 `src` 中维护：
+
+- UI Message Stream 中与 CraftingTable 相关的 chunk 子集。
+- `start` 和 `finish` 的 `messageMetadata` 校验。
+- 事件到领域消息和片段的映射。
+- 取消、未知 chunk、终止事件和 EOF 的语义。
+
+禁止在 `src` 中重复实现以下内容：
+
+- SSE 行分块、`data:` 拼接和网络 chunk 缓冲。
+- 引入完整第三方对话 Store 后继续保留 Zustand 作为另一份可修改业务状态。
+- 复制外部项目的目录树、完整消息 reducer 或未使用的工具调用模块。
+- 按数组位置猜测 `sessionId`、`runId` 或消息归属。
+
+设计参考基线：
+
+- [DefaultChatTransport](https://github.com/vercel/ai/blob/main/packages/ai/src/ui/default-chat-transport.ts)
+- [HttpChatTransport](https://github.com/vercel/ai/blob/main/packages/ai/src/ui/http-chat-transport.ts)
+- [readUIMessageStream](https://github.com/vercel/ai/blob/main/packages/ai/src/ui-message-stream/read-ui-message-stream.ts)
+- [mimo-chat 协议分层](https://github.com/xiaomi/mimo-chat) 的传输、协议 Adapter 和状态写入分离方式。
+
+这些仓库只作为设计和测试对照。升级协议前先更新 fixture，再运行前端 Adapter、Go 集成测试和浏览器 E2E。
+
+Go 侧没有项目所需的官方流写入器。`server/internal/agent/access` 维护最小的 UI Message Stream 编码，负责 SSE 帧、`[DONE]`、响应头和 CraftingTable metadata；模型供应商协议仍由 `provider` 和 `core` 隔离。
+
+早期的 `readServerEvents` 和 `parseEvent` 已由 `agentTransport.ts`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 取代。后续协议扩展必须沿用这条项目自有链路，不回退为在 Model 内直接切分字节流。
+
+`agentTransport.ts` 把发送参数映射为 CraftingTable 请求体：
 
 - `sessionId`
 - `clientRequestId`
-- 最后一条用户 `UIMessage`，其中包含稳定的用户消息 `id`
+- `userMessageId`
+- `assistantMessageId`
+- `assistantPartId`
+- `runId`
+- 当前上下文消息数组
 
 服务端在 `start` 的 `messageMetadata` 中返回 `sessionId`、`runId` 和 `userMessageId`，在 `text-start` 中返回稳定的 `partId`。前端不能自行生成随后无法与数据库对应的助手消息或片段 ID。
 
 ```ts
-type CraftingTableUIMessageMetadata = {
+type CraftingTableStreamMetadata = {
   sessionId?: string
   assistantMessageId?: string
   runId: string
@@ -1031,14 +1090,12 @@ data: [DONE]
 ### 11.4 错误事件
 
 ```text
-data: {"type":"data-agent-error","id":"run-id","transient":true,"data":{"code":"AGENT_PROVIDER_FAILED","kind":"server","message":"模型调用失败，请重试","retryable":true}}
-
-data: {"type":"error","errorText":"模型调用失败，请重试"}
+data: {"type":"error","errorText":"模型调用失败，请重试","agentError":{"code":"AGENT_PROVIDER_FAILED","kind":"server","message":"模型调用失败，请重试","retryable":true}}
 
 data: [DONE]
 ```
 
-`data-agent-error` 属于 AI SDK 的 transient custom data chunk，不进入消息历史；`errorText` 只承担用户可读文本。适配器必须先缓存结构化错误，再处理随后的 `error` chunk。结构化错误详情必须符合工程规范的错误矩阵，至少保留 `code`、`kind`、`retryable` 和已 Schema 化的 `details`。
+`agentError` 是 CraftingTable 在协议兼容子集上的扩展字段，只用于当前流传递结构化错误，不进入消息历史。`errorText` 只承担用户可读文本。结构化错误详情必须符合工程规范的错误矩阵，至少保留 `code`、`kind`、`retryable` 和已 Schema 化的 `details`。
 
 ### 11.5 取消事件
 
@@ -1060,7 +1117,7 @@ data: [DONE]
 - 重复终止事件视为协议错误。
 - 已知结构错误必须进入失败状态，不能静默忽略。
 - 未来新增的未知非终止 chunk 可以忽略并记录 debug 日志。
-- 心跳使用 SSE 注释，不进入 `UIMessage` 和 Zustand。
+- 心跳使用 SSE 注释，不进入 `AgentStreamEvent` 和 Zustand。
 
 ## 12. 前端 MVC
 
@@ -1069,11 +1126,12 @@ data: [DONE]
 负责：
 
 - 调用会话列表、详情、创建、取消和重试 API。
-- 通过 `DefaultChatTransport` 发起消息发送。
+- 使用 `agentTransport.ts` 发起消息发送。
 - 接收平台注入的 fetch 适配器；Web 使用同源请求，Desktop 使用 preload bridge。
-- 通过 `readUIMessageStream` 读取快照。
+- 把 `Response.body` 交给 `agentStreamProtocol.ts`。
+- 只消费 `AgentStreamEvent`，不读取网络字节块。
 - 将网络、HTTP、Schema 和协议错误统一转换为 `Result<T>`。
-- 将 `UIMessage` 转换为 CraftingTable 领域消息。
+- 将 `AgentStreamEvent` 转换为 CraftingTable 领域消息。
 
 不得：
 
@@ -1081,6 +1139,7 @@ data: [DONE]
 - 显示 Toast。
 - 访问 React。
 - 决定发送状态。
+- 手写 SSE 解码、外部消息对象或第二份消息状态。
 
 发送接口使用清晰的边界签名：
 
@@ -1114,11 +1173,11 @@ type SendMessage = (
 ) => Promise<Result<AgentSendResult>>
 ```
 
-Model 在内部消费 AI SDK 流并调用 `onSnapshot`，但不直接修改 Store。`onStarted` 只在收到合法 `start` metadata 后调用一次；`onSnapshot` 可调用零次或多次；Promise 在 `finish`、`error` 或 `abort` 终止事件完成、且服务端已返回持久化成功的终止 chunk 后解析。流开始前的 HTTP 错误、Schema 错误和流中的协议错误都转换为 `Result`；异常不穿透到 View。
+Model 在内部消费协议事件并调用 `onSnapshot`，但不直接修改 Store。`onStarted` 只在合法 Run 建立后调用一次；`onSnapshot` 可调用零次或多次；Promise 在 `finish`、`error` 或 `abort` 终止事件完成、且服务端已返回持久化成功的终止 chunk 后解析。流开始前的 HTTP 错误、Schema 错误和流中的协议错误都转换为 `Result`；异常不穿透到 View。
 
 用户取消对应 `status=cancelled` 的正常 `Result`，不显示错误 Toast。流在缺少终止事件时结束返回 `PROTOCOL_UNEXPECTED_EOF`。调用方不能通过检查 `onSnapshot` 的最后一次渲染推断持久化成功，必须以 Promise 的终态结果为准。
 
-`DefaultChatTransport` 的构造参数由 Model 持有，不能由组件临时 new 一份。传输器关闭时释放平台 fetch 适配器和正在使用的 `MessagePort`。
+Transport 和协议 Adapter 的生命周期由 Model 持有，不能由组件临时创建。传输器关闭时释放平台 fetch 适配器和正在使用的 `MessagePort`。
 
 ### 12.2 AgentStore
 
@@ -1169,7 +1228,7 @@ messageId + partId
 - 加载会话列表和详情。
 - 创建会话。
 - 发送消息。
-- 将流式 `UIMessage` 快照映射到 Store。
+- 将流式 `AgentMessageSnapshot` 映射到 Store。
 - 在应用级维护 `runId -> AbortController`，页面切换不立即中止当前 Live Run。
 - 调用取消和重试。
 - 处理 Toast。
@@ -1268,7 +1327,7 @@ type Runtime interface {
 
 Runtime 不接收数据库连接、HTTP ResponseWriter 或 Zustand 类型。
 
-`Stream` 使用的 `ctx` 来自 Executor 的 run-scoped context，而不是 HTTP Handler 的 request context。浏览器断开只取消订阅，不能取消该 context。Executor 负责 `RunPolicy` 的总时长和空闲超时；Runtime 只负责单次供应商调用及自身更短的调用超时。SSE 每 15 秒发送一次注释心跳；心跳不写数据库，也不进入 `UIMessage`。
+`Stream` 使用的 `ctx` 来自 Executor 的 run-scoped context，而不是 HTTP Handler 的 request context。浏览器断开只取消订阅，不能取消该 context。Executor 负责 `RunPolicy` 的总时长和空闲超时；Runtime 只负责单次供应商调用及自身更短的调用超时。SSE 每 15 秒发送一次注释心跳；心跳不写数据库，也不进入 `AgentStreamEvent`。
 
 ### 13.3 模型供应商
 
@@ -1379,18 +1438,18 @@ Provider SSE
 ```text
 tests/e2e/unit/agent/agentStore.test.ts
 tests/e2e/unit/agent/agentModel.test.ts
-tests/e2e/unit/agent/agentMessageReducer.test.ts
+tests/e2e/unit/agent/agentStreamAdapter.test.ts
 tests/e2e/unit/agent/agentStreamProtocol.test.ts
 ```
 
 覆盖：
 
 - Store 同步 action。
-- `messageId + partId` 合并。
+- `messageId + partId` 领域合并。
 - `Result<T>` 错误映射。
 - 取消不显示错误 Toast。
-- `UIMessage` 快照到领域消息的转换。
-- SSE 顺序、终止和畸形事件。
+- `AgentStreamEvent` 到领域消息的转换。
+- 项目协议 Adapter 消费 Go fixture 后的快照顺序、终止和畸形事件；需要对照兼容性时可用 AI SDK 作为测试 oracle，但不进入生产依赖。
 
 ### 17.2 Integration
 
@@ -1473,7 +1532,7 @@ tests/e2e/desktop/agentCrashRecovery.desktop.ts
 ## 18. 实施顺序
 
 1. 建立 Agent 领域类型、数据库迁移和 Repository。
-2. 实现 Fake Runtime、RunEvent、MessagePart、Run Coordinator 和 SSE Encoder。
+2. 实现 Fake Runtime、RunEvent、MessagePart、Run Coordinator，并按项目协议实现最小 UI Message Stream Encoder。
 3. 实现 Go Controller、幂等发送、取消、断线脱离和中断清理。
 4. 接入 Electron sidecar 启动、主进程 transport bridge 和本地数据库路径。
 5. 实现 `AgentModel`、`AgentStore` 和 `AgentEffect`。
@@ -1534,7 +1593,9 @@ tests/e2e/desktop/agentCrashRecovery.desktop.ts
 - 用户取消和普通失败可以保留已提交的部分文本；硬中断只保证已提交片段，并明确提供重试入口。
 - 同一 `clientRequestId` 不会重复创建消息和 Run。
 - `AgentExecutor` 遵守不可变 `RunPolicy`，Runtime 只执行单次有界调用。
-- 前端使用 Vercel AI SDK Transport 和 UI Message Stream，不使用 `useChat`。
+- 前端使用 `agentTransport.ts`、`eventsource-parser` 和 `agentStreamProtocol.ts` 组成三层 pipe-through，不引入第三方对话 Store。
+- `src` 不包含自建通用 SSE Parser、第三方 `UIMessageChunk` Reducer 或第二份消息 Store。
+- Go 输出通过项目 fixture 验证；需要兼容性对照时可运行 AI SDK oracle，但生产链路使用项目自有最小 Encoder。
 - Zustand 是前端业务状态唯一事实源。
 - Go Runtime 不访问数据库，Repository 不依赖 HTTP。
 - `src` 不包含供应商原始事件解析，`server` 不输出未经转换的供应商协议。

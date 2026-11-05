@@ -11,13 +11,14 @@ CraftingTable 是一个单用户个人事务工作台。当前仓库使用 React
 - Agent 会话工作区、独立会话侧栏和流式消息界面。
 - 一级导航、二级侧边栏和响应式布局。
 
-Agent 在开发模式通过 Go 服务端的 `/api/v1/agent/stream` 连接 OpenAI 兼容模型；浏览器不会读取模型 API Key。Vitest 和 Playwright 固定使用 `FakeAgentModel`，Go 集成测试使用 loopback Fake Provider，以保证结果可重复。
+Agent 在开发模式通过 Go 服务端的 `/api/v1/agent/stream` 连接 OpenAI 兼容模型；浏览器不会读取模型 API Key。当前接口输出项目定义的 UI Message Stream 兼容子集，前端由 `agentTransport.ts`、`eventsource-parser`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 组成三层 pipe-through。Vitest 和 Playwright 固定使用 `FakeAgentModel`，Go 集成测试使用 loopback Fake Provider，以保证结果可重复。
 
 相关文档：
 
 - [术语表](docs/glossary.md)
 - [工程化设计规范](docs/superpowers/specs/2026-11-05-craftingtable-engineering-design.md)
 - [Agent 设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-design.md)
+- [Agent 流协议状态机设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-stream-state-machine-design.md)
 - [Agent 架构图](docs/architecture/README.md)
 - [早期个人工作台设计（已取代）](docs/superpowers/specs/2026-11-04-leeat-personal-workbench-design.md)
 - [旧 Agent 工作区设计（已取代）](docs/superpowers/specs/20261104LeeatAgentWorkspaceDesign.md)
@@ -32,6 +33,10 @@ Agent 在开发模式通过 Go 服务端的 `/api/v1/agent/stream` 连接 OpenAI
 - Agent：单 Agent 起步，预留工具、Skills、MCP、多 Agent 和评测扩展点。
 - 架构采用策略：目标架构完整采用，系统能力渐进落地；规范不因 MVP 缩水，也不提前复制外部项目的全部技术栈和进程拓扑。
 - 前端 Model 边界返回 `Result<T>`，Zustand 是业务状态唯一事实源。
+- 开源项目采用原则：Vercel AI SDK、`mimo-chat` 和 `aisdk-go` 只作为设计与测试参考，不进入生产依赖。吸收后的实现必须用 CraftingTable 自己的类型、错误模型、Adapter 和测试重新表达，不直接移植其对话层、业务层或完整 Agent 架构。
+- 只有职责单一且不拥有业务语义的通用工具包可以直接依赖，例如 `eventsource-parser` 用于 SSE 清理、`lodash` 用于通用数据操作。项目自己维护 HTTP Transport、协议子集映射和领域消息 Adapter。
+- Agent 前端由 `agentTransport.ts`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 分层处理流；`eventsource-parser` 只负责 SSE 分帧，不承担消息状态或领域语义。
+- 开发流程遵循 SDD：先更新设计与实施计划，再写失败测试和最小实现；未完成文档评审的变更不进入生产代码。
 - 产品行为、API、契约和桌面验收测试统一位于 `tests/e2e`。
 - Web 身份、多端同步、多实例租约、可恢复流和 Redis 职责必须在对应架构决策门完成后才能进入生产实现。
 

@@ -35,6 +35,8 @@
 6. **桌面端不是浏览器**：Electron 的 IPC、文件、外链、快捷键、离线启动和打包行为必须在真实桌面进程中验证。
 7. **文档描述当前事实或明确标注状态**：过时方案不继续伪装成当前设计。
 8. **规范高于当前实现**：现有原型不满足规范时，结论是迁移实现，不是降低规范。
+9. **开源引进吸收再创新**：开源项目作为设计与实现样本，先理解约束、取舍和失败模式，再用本项目自己的领域语言重新设计；不直接拿来，不整包照搬，也不复制未经理解的实现。
+10. **SDD 先于实现**：功能、行为或架构发生变化时，先写或更新设计文档，再形成实施计划，最后用失败测试驱动最小实现。未评审的设计不能直接进入生产代码。
 
 ### 2.1 架构采用策略
 
@@ -46,6 +48,27 @@ CraftingTable 采用“**目标架构完整采用，系统能力渐进落地**�
 - 每项延迟实现都必须在本文标记触发条件和进入生产前必须满足的门槛，不能用“以后再说”代替契约设计。
 - 不创建没有真实职责的空层、空接口或占位模块。接口在边界需要稳定或存在真实替换需求时建立。
 - 阶段实现可以暂时使用 SQLite、单进程执行和直接 SSE，但不得改变未来 PostgreSQL、Daemon、Redis 和多实例机制需要遵守的领域语义。
+
+### 2.2 开源项目采用规则
+
+成熟开源项目用于验证方向、发现边界条件和比较实现，不作为直接复制业务架构的理由。引入一个项目时，先回答以下问题：
+
+1. 它解决的具体问题是什么？
+2. 哪些约束与 CraftingTable 相同，哪些不同？
+3. 哪些实现值得吸收，哪些只适用于原项目的产品形态？
+4. 本项目应保留什么更简单的边界？
+5. 如何用当前项目的测试证明吸收后的行为正确？
+
+吸收结果必须用 CraftingTable 的目录、类型、错误模型和测试重新表达。禁止直接拿来外部项目的整个业务层、状态机、目录树或未使用模块。
+
+通用工具包可以直接依赖，但必须满足以下条件：
+
+- 包的职责单一，例如 `eventsource-parser` 只处理 Server-Sent Events（SSE）解析。
+- 包不拥有 CraftingTable 的业务状态、领域协议或持久化语义。
+- 包可以锁定版本，许可证清晰，并能在 Adapter 边界替换。
+- 升级时可以用项目测试验证行为，不依赖人工观察。
+
+例如 `eventsource-parser` 和 `lodash` 可以直接使用。Vercel AI SDK、`mimo-chat` 等包含完整产品链路或 Agent 协议设计的项目，应作为参考基线，通过研究记录、设计对比和项目内 Adapter 吸收，不直接粘贴其业务实现。这里的“直接使用”只适用于不会成为本项目业务状态、领域协议或 Agent 架构事实源的工具包。
 
 ## 3. 目标与非目标
 
@@ -76,7 +99,7 @@ CraftingTable 采用“**目标架构完整采用，系统能力渐进落地**�
 以下结果即使功能可用，也视为工程失败：
 
 - 页面可以运行，但 View 直接请求 API 或导入 Model。
-- Store 保存一份状态，AI SDK Hook 又保存另一份可修改状态。
+- Store 保存一份状态，第三方 Chat Hook 或 SDK 内置 Store 又保存另一份可修改状态。
 - SSE 已发送成功，但数据库中的消息和前端显示无法对应。
 - 每次 token 都写数据库，导致消息存储快速膨胀。
 - API 新增字段后，前端静默显示空白或崩溃。
@@ -248,6 +271,39 @@ Agent 的执行生命周期不能绑定到一次 HTTP 连接：
 - 注释解释原因、约束、竞态和业务规则，不复述代码字面含义。
 - 注释与实现不一致视为缺陷。
 
+### 6.1 流协议与第三方依赖
+
+Agent 前端吸收 Vercel AI SDK 和 `mimo-chat` 的分层方法。Vercel AI SDK、`mimo-chat` 和 `aisdk-go` 不进入生产依赖，也不直接移植其对话层或业务层。完整协议和职责表以 [Agent 设计 11.1](./2026-11-05-craftingtable-agent-design.md#111-协议选择与三层-pipe-through) 为准。
+
+固定链路：
+
+1. `agentTransport.ts` 发起请求并取得标准 `Response`。
+2. `agentStreamProtocol.ts` 使用通用 `eventsource-parser` 清理 SSE，再把本项目需要的 chunk 转换为 `AgentStreamEvent`。
+3. `apiAgentModel.ts` 消费领域事件，由现有消息状态逻辑生成 `AgentMessageSnapshot`。
+
+协议层只暴露 `text-delta`、`finish` 和 `error` 等业务需要的语义。未知的非终止 chunk 可以忽略，已知结构错误必须进入稳定错误路径。禁止在 `src` 中重复实现以下逻辑：
+
+- SSE 行分块、`data:` 拼接和跨网络 chunk 缓冲。
+- 把第三方工具包的内部消息对象当成 Zustand 业务状态。
+- 为同一份文本同时维护 SDK 消息、Store 消息和组件本地消息。
+- 把外部项目的工具调用、Artifact 或多 Agent 编排原样复制进当前 Runtime。
+
+依赖选择遵循以下顺序：
+
+1. 只有通用、边界清晰且不拥有业务语义的工具包可以直接依赖。
+2. 协议、消息状态、会话状态和 Agent 编排必须由项目自己的类型与测试定义。
+3. 参考实现用于研究，不直接引入其业务模块、状态容器或目录结构。
+4. 外部类型止步于 Adapter 边界，不进入 Store、领域对象或跨端契约。
+5. 依赖必须锁定精确版本或 commit，并记录许可证和第三方声明。
+6. 依赖升级必须通过 Agent 协议 fixture、浏览器 E2E 和 Desktop bridge 测试。
+
+当前实现基线：
+
+- 前端直接依赖 `eventsource-parser`，只使用其 SSE 清理能力。
+- `agentTransport.ts`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 由项目维护，吸收 Vercel AI SDK 与 `mimo-chat` 的分层方法。
+- Go 侧在 `server/internal/agent/access` 中实现最小的 UI Message Stream 编码，不直接依赖完整 AI SDK 类库。
+- Vercel AI SDK、`coder/aisdk-go` 和 `nmn28/aisdk-go` 仅作为协议研究与测试对照，不进入生产依赖。
+
 ## 7. Go 规范
 
 - 使用 `gofmt` 和 `go vet`，不手工对抗标准格式。
@@ -415,8 +471,9 @@ Agent 错误矩阵固定如下；“流内”表示 HTTP 已经进入 SSE，只�
 ## 10. 状态与数据所有权
 
 - Zustand Store 是前端业务状态唯一事实源。
-- AI SDK 的 `UIMessage` 只作为协议映射对象，不成为第二条可修改业务状态。
-- React Query、SWR、组件本地 state 和 AI SDK Hook 不得复制会话、消息或发送状态。
+- `AgentStreamEvent` 只作为协议映射对象，不成为第二条可修改业务状态。
+- React Query、SWR、组件本地 state、第三方 Chat Hook 和 SDK 内置 Store 不得复制会话、消息或发送状态。
+- `agentTransport.ts` 只负责请求与错误 envelope，`agentStreamProtocol.ts` 只负责 SSE 和协议映射；CraftingTable 的 Store action 只由 Agent Effect 和领域 Adapter 调用。
 - 服务端状态加载后先转换为领域对象，再写入 Store。
 - 临时 UI 状态，例如菜单是否打开、输入框草稿和 hover 状态，可以留在组件或专用 UI Store。
 - 不在 Store 中保存 AbortController、ReadableStream、DOM 节点或不可序列化对象。
@@ -464,7 +521,7 @@ Agent 错误矩阵固定如下；“流内”表示 HTTP 已经进入 SSE，只�
 
 ```text
 tests/e2e/
-  unit/                 Store、Reducer、Parser 和纯函数
+  unit/                 Store、领域 Adapter 和纯函数
   integration/          HTTP 黑盒、契约、流协议和持久化行为
   modules/              浏览器用户流程
   desktop/              Electron 启动、IPC 和打包后流程
@@ -494,7 +551,8 @@ Playwright 配置必须同时收集 `**/*.e2e.ts` 和 `**/*.desktop.ts`。浏览
 | --- | --- |
 | Store action、selector | 对应 `tests/e2e/unit` 测试 |
 | Effect、Model、HTTP 错误 | 对应 unit 测试和契约 fixture |
-| Agent SSE Parser / Reducer | 事件顺序、终止、取消和畸形事件测试 |
+| Agent 三层 pipe-through | 用项目 Transport 和协议 Adapter 消费 Go fixture，覆盖终止、取消和畸形事件 |
+| `AgentStreamAdapter` | 协议事件到领域消息的字段、归属和状态映射测试 |
 | Go Handler / Repository | `tests/e2e` HTTP 黑盒测试；未导出纯逻辑可加 package `_test.go` |
 | API 契约 | TypeScript Schema 与 Go 响应 fixture 双向验证 |
 | 页面交互 | 相关 Playwright module 测试 |
@@ -531,7 +589,7 @@ Playwright 配置必须同时收集 `**/*.e2e.ts` 和 `**/*.desktop.ts`。浏览
 - IPC 输入使用 Schema 校验，禁止暴露通用 `ipcRenderer`、`fs` 或 `shell`。
 - 本地 Go sidecar 只监听 `127.0.0.1`，使用随机端口和短期鉴权 Token。
 - 生产 Desktop 中，Renderer 不读取 sidecar 端口和 Token。preload 只暴露窄范围的 Agent transport bridge；主进程持有端点和凭据，并负责流式请求代理。
-- Web 直接请求同源 `/api/v1`；Desktop 通过注入给 `DefaultChatTransport` 的受控 fetch 适配器请求主进程。两条路径最终返回同一 `ReadableStream<UIMessageChunk>`。
+- Web 直接请求同源 `/api/v1`；Desktop 通过注入给 `agentTransport.ts` 的受控 fetch 适配器请求主进程。两条路径最终返回同一标准 `Response`。
 - 主进程校验每次请求的会话、路径、方法、请求大小和取消信号；不为 Renderer 暴露通用网络代理。
 - 生产包启用 CSP，并拒绝未登记权限请求。
 
@@ -601,7 +659,7 @@ pnpm build
 
 ## 16. 分阶段实施
 
-以下九项全部是最终必须满足的规范目标。`bootstrap` 表示需要先建立骨架，`enforcing` 表示已经作为阻塞门禁执行；任何阶段都不能删除目标本身。
+以下十项全部是最终必须满足的规范目标。`bootstrap` 表示需要先建立骨架，`enforcing` 表示已经作为阻塞门禁执行；任何阶段都不能删除目标本身。
 
 1. 根级 `AGENTS.md` 和文档索引：`bootstrap -> enforcing`。
 2. MVC 依赖方向静态检查：`bootstrap -> enforcing`。
@@ -612,6 +670,7 @@ pnpm build
 7. Electron 安全基线和真实进程测试：`bootstrap -> enforcing`。
 8. Go sidecar 启动、健康检查、鉴权、优雅退出和崩溃重启：`bootstrap -> enforcing`。
 9. Go Agent 分层依赖静态检查：`bootstrap -> enforcing`。
+10. Agent 前端三层 pipe-through 和 Go 协议一致性测试：`bootstrap -> enforcing`。
 
 允许按依赖关系并行建立骨架，但不允许把尚未启用的门禁描述成非目标。每个阶段结束时必须更新能力状态、验收命令和剩余风险。
 
@@ -661,6 +720,8 @@ Fastify 原型已由 Go 服务替换，不属于目标架构。若旧原型中�
 - 外部数据在边界完成校验。
 - Model 边界使用 `Result<T>`，组件不再重复处理底层网络异常。
 - Agent 流协议有独立 fixture 和失败场景测试。
+- 前端通过项目 Transport、`eventsource-parser` 和协议 Adapter 消费流，`src` 不包含自建 SSE 清理器。
+- 流协议 fixture 能同时验证前端 Adapter 和 Go 输出，第三方工具包已锁定版本并保留许可证说明。
 - 主题色没有新增业务硬编码。
 - 日志不包含敏感内容。
 - Electron 在真实进程中通过启动、关键交互和 IPC 测试。
