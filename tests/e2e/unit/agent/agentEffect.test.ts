@@ -287,4 +287,229 @@ describe("AgentEffect", () => {
         .map((part) => part.content.text),
     ).toContain("重试后的回复");
   });
+
+  it("resumes a running session after loading persisted detail", async () => {
+    const resumed = vi.fn(async (_input, handlers) => {
+      handlers.onStarted({
+        assistantMessageId: "assistant-1",
+        runId: "run-1",
+        status: "running",
+      });
+      handlers.onSnapshot({
+        message: {
+          id: "assistant-1",
+          sessionId: "session-1",
+          seq: 2,
+          role: "assistant",
+          status: "streaming",
+          activeRunId: "run-1",
+          userMessageId: "user-1",
+          createdAt: "2026-11-05T00:00:00Z",
+          updatedAt: "2026-11-05T00:00:01Z",
+        },
+        parts: [
+          {
+            id: "part-1",
+            messageId: "assistant-1",
+            runId: "run-1",
+            index: 0,
+            type: "text",
+            status: "streaming",
+            content: { type: "text", text: "恢复内容" },
+            createdAt: "2026-11-05T00:00:00Z",
+            updatedAt: "2026-11-05T00:00:01Z",
+          },
+        ],
+      });
+      handlers.onSnapshot({
+        message: {
+          id: "assistant-1",
+          sessionId: "session-1",
+          seq: 2,
+          role: "assistant",
+          status: "complete",
+          activeRunId: "run-1",
+          userMessageId: "user-1",
+          createdAt: "2026-11-05T00:00:00Z",
+          updatedAt: "2026-11-05T00:00:02Z",
+        },
+        parts: [
+          {
+            id: "part-1",
+            messageId: "assistant-1",
+            runId: "run-1",
+            index: 0,
+            type: "text",
+            status: "complete",
+            content: { type: "text", text: "恢复内容" },
+            createdAt: "2026-11-05T00:00:00Z",
+            updatedAt: "2026-11-05T00:00:02Z",
+          },
+        ],
+      });
+      return [
+        {
+          assistantMessageId: "assistant-1",
+          runId: "run-1",
+          status: "completed" as const,
+        },
+        null,
+      ] as const;
+    });
+    const base = createFakeAgentModel({ chunkDelayMs: 0 });
+    const model: AgentModel = {
+      ...base,
+      getSession: async () => [
+        {
+          session: {
+            id: "session-1",
+            title: "恢复会话",
+            createdAt: "2026-11-05T00:00:00Z",
+            updatedAt: "2026-11-05T00:00:02Z",
+          },
+          messages: [
+            {
+              id: "user-1",
+              sessionId: "session-1",
+              seq: 1,
+              role: "user",
+              status: "complete",
+              createdAt: "2026-11-05T00:00:00Z",
+              updatedAt: "2026-11-05T00:00:00Z",
+            },
+            {
+              id: "assistant-1",
+              sessionId: "session-1",
+              seq: 2,
+              role: "assistant",
+              status: "streaming",
+              activeRunId: "run-1",
+              userMessageId: "user-1",
+              createdAt: "2026-11-05T00:00:00Z",
+              updatedAt: "2026-11-05T00:00:01Z",
+            },
+          ],
+          messageParts: [
+            {
+              id: "part-1",
+              messageId: "assistant-1",
+              runId: "run-1",
+              index: 0,
+              type: "text",
+              status: "streaming",
+              content: { type: "text", text: "已有" },
+              createdAt: "2026-11-05T00:00:00Z",
+              updatedAt: "2026-11-05T00:00:01Z",
+            },
+          ],
+          activeRun: {
+            runId: "run-1",
+            status: "running",
+            lastSequence: 7,
+          },
+          nextMessageCursor: null,
+        },
+        null,
+      ],
+      resumeRun: resumed,
+    };
+    const effect = createAgentEffect(model, { success: () => undefined });
+
+    await effect.loadSessions();
+    await effect.loadSession("session-1");
+
+    await waitFor(() => {
+      expect(resumed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          runId: "run-1",
+          afterSequence: 7,
+        }),
+        expect.any(Object),
+      );
+      expect(
+        useAgentStore
+          .getState()
+          .partsByMessageId["assistant-1"]?.[0],
+      ).toMatchObject({
+        type: "text",
+        content: { type: "text", text: "恢复内容" },
+      });
+      expect(useAgentStore.getState().liveRun).toBeNull();
+    });
+  });
+
+  it("does not subscribe twice when the same running session is loaded again", async () => {
+    let finishResume: (() => void) | undefined;
+    const resumed = vi.fn(
+      (_input, _handlers) =>
+        new Promise<Awaited<ReturnType<AgentModel["resumeRun"]>>>((resolve) => {
+          finishResume = () => {
+            resolve([
+              {
+                assistantMessageId: "assistant-1",
+                runId: "run-1",
+                status: "completed",
+              },
+              null,
+            ]);
+          };
+        }),
+    );
+    const detail = {
+      session: {
+        id: "session-1",
+        title: "恢复会话",
+        createdAt: "2026-11-05T00:00:00Z",
+        updatedAt: "2026-11-05T00:00:02Z",
+      },
+      messages: [
+        {
+          id: "assistant-1",
+          sessionId: "session-1",
+          seq: 2,
+          role: "assistant" as const,
+          status: "streaming" as const,
+          activeRunId: "run-1",
+          userMessageId: "user-1",
+          createdAt: "2026-11-05T00:00:00Z",
+          updatedAt: "2026-11-05T00:00:01Z",
+        },
+      ],
+      messageParts: [
+        {
+          id: "part-1",
+          messageId: "assistant-1",
+          runId: "run-1",
+          index: 0,
+          type: "text" as const,
+          status: "streaming" as const,
+          content: { type: "text" as const, text: "恢复中" },
+          createdAt: "2026-11-05T00:00:00Z",
+          updatedAt: "2026-11-05T00:00:01Z",
+        },
+      ],
+      activeRun: {
+        runId: "run-1",
+        status: "running" as const,
+        lastSequence: 4,
+      },
+      nextMessageCursor: null,
+    };
+    const model: AgentModel = {
+      ...createFakeAgentModel({ chunkDelayMs: 0 }),
+      getSession: async () => [detail, null],
+      resumeRun: resumed,
+    };
+    const effect = createAgentEffect(model, { success: () => undefined });
+
+    await effect.loadSession("session-1");
+    await effect.loadSession("session-1");
+
+    expect(resumed).toHaveBeenCalledTimes(1);
+    finishResume?.();
+    await waitFor(() => {
+      expect(useAgentStore.getState().liveRun).toBeNull();
+    });
+  });
 });

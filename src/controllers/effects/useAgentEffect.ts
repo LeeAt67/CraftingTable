@@ -8,6 +8,7 @@ import type {
   AgentMessagePart,
   AgentSendResult,
   AgentSession,
+  AgentSessionDetail,
   Result,
 } from "@/models/agentContracts";
 import { agentModel as defaultAgentModel } from "@/models/agentModel";
@@ -61,6 +62,10 @@ export function createAgentEffect(
   notifier: Notifier = defaultNotifier,
 ) {
   const abortControllers = new Map<string, AbortController>();
+  const activeSubscriptions = new Map<
+    string,
+    { sessionId: string; controller: AbortController }
+  >();
   let sessionsLoaded = false;
   let sessionsPromise: Promise<Result<AgentSession[]>> | null = null;
   let loadGeneration = 0;
@@ -68,6 +73,20 @@ export function createAgentEffect(
   const reportFailure = (error: AgentError) => {
     useAgentStore.getState().setError(error);
     useAgentStore.getState().setSendPhase("error");
+  };
+
+  const stopSubscription = (runId: string) => {
+    activeSubscriptions.get(runId)?.controller.abort();
+    activeSubscriptions.delete(runId);
+    abortControllers.delete(runId);
+  };
+
+  const stopSubscriptionsForSession = (sessionId: string) => {
+    for (const [runId, subscription] of activeSubscriptions) {
+      if (subscription.sessionId === sessionId) {
+        stopSubscription(runId);
+      }
+    }
   };
 
   const loadSessions = async () => {
@@ -147,9 +166,13 @@ export function createAgentEffect(
           sessionId: detail.session.id,
           runId: detail.activeRun.runId,
         });
-      } else if (state.liveRun?.sessionId === detail.session.id) {
-        state.setSendPhase("idle");
-        state.setLiveRun(null);
+        startRunSubscription(detail, detail.activeRun);
+      } else {
+        stopSubscriptionsForSession(detail.session.id);
+        if (state.liveRun?.sessionId === detail.session.id) {
+          state.setSendPhase("idle");
+          state.setLiveRun(null);
+        }
       }
       return result;
     } catch (cause) {
@@ -172,14 +195,17 @@ export function createAgentEffect(
       },
     ) => Promise<Result<AgentSendResult>>,
     onStarted: (started: AgentSendResult) => void,
+    providedAbortController?: AbortController,
   ) => {
-    const abortController = new AbortController();
+    const abortController = providedAbortController ?? new AbortController();
     let assistantMessageId: string | null = null;
+    let runId: string | null = null;
 
     try {
       const result = await request(abortController.signal, {
         onStarted: (started) => {
           assistantMessageId = started.assistantMessageId;
+          runId = started.runId;
           abortControllers.set(started.runId, abortController);
           onStarted(started);
           useAgentStore
@@ -188,6 +214,8 @@ export function createAgentEffect(
           useAgentStore.getState().setSendPhase("streaming");
         },
         onSnapshot: (snapshot) => {
+          assistantMessageId = snapshot.message.id;
+          runId = snapshot.message.activeRunId ?? runId;
           const current = useAgentStore.getState();
           current.upsertMessage(snapshot.message.sessionId, snapshot.message);
           for (const part of snapshot.parts) {
@@ -236,20 +264,55 @@ export function createAgentEffect(
       reportFailure(error);
       return [null, error] as const;
     } finally {
-      if (assistantMessageId) {
-        const messages = useAgentStore.getState().messagesBySessionId[sessionId];
-        const assistant = messages?.find(
-          (message) => message.id === assistantMessageId,
-        );
-        if (assistant?.activeRunId) {
-          abortControllers.delete(assistant.activeRunId);
-        }
+      if (runId) {
+        abortControllers.delete(runId);
       }
       const liveRun = useAgentStore.getState().liveRun;
-      if (liveRun?.sessionId === sessionId) {
+      if (
+        liveRun?.sessionId === sessionId &&
+        (!runId || liveRun.runId === runId)
+      ) {
         useAgentStore.getState().setLiveRun(null);
       }
     }
+  };
+
+  const startRunSubscription = (
+    detail: AgentSessionDetail,
+    activeRun: NonNullable<AgentSessionDetail["activeRun"]>,
+  ) => {
+    if (activeSubscriptions.has(activeRun.runId)) {
+      return;
+    }
+    const controller = new AbortController();
+    activeSubscriptions.set(activeRun.runId, {
+      sessionId: detail.session.id,
+      controller,
+    });
+    abortControllers.set(activeRun.runId, controller);
+    void executeRun(
+      detail.session.id,
+      (signal, handlers) =>
+        model.resumeRun(
+          {
+            sessionId: detail.session.id,
+            runId: activeRun.runId,
+            afterSequence: activeRun.lastSequence,
+            signal,
+          },
+          handlers,
+        ),
+      () => undefined,
+      controller,
+    ).finally(() => {
+      const subscription = activeSubscriptions.get(activeRun.runId);
+      if (subscription?.controller === controller) {
+        activeSubscriptions.delete(activeRun.runId);
+      }
+      if (abortControllers.get(activeRun.runId) === controller) {
+        abortControllers.delete(activeRun.runId);
+      }
+    });
   };
 
   const sendMessage = async (rawText: string) => {
