@@ -119,4 +119,37 @@ describe("agentStreamProtocol", () => {
       },
     });
   });
+
+  it("rejects [DONE] before a terminal event", async () => {
+    const stream = streamOf(
+      [
+        'data: {"type":"start","messageId":"message-1","messageMetadata":{"sessionId":"session-1","runId":"run-1","userMessageId":"user-1"}}',
+        "data: [DONE]",
+        "",
+        "",
+      ].join("\n\n"),
+    );
+
+    await expect(collect(readAgentStream(stream))).rejects.toMatchObject({
+      agentError: {
+        code: "PROTOCOL_UNEXPECTED_EOF",
+        kind: "protocol",
+        retryable: true,
+      },
+    });
+  });
+
+  it("rejects EOF before a terminal event", async () => {
+    const stream = streamOf(
+      'data: {"type":"start","messageId":"message-1","messageMetadata":{"sessionId":"session-1","runId":"run-1","userMessageId":"user-1"}}\n\n',
+    );
+
+    await expect(collect(readAgentStream(stream))).rejects.toMatchObject({
+      agentError: {
+        code: "PROTOCOL_UNEXPECTED_EOF",
+        kind: "protocol",
+        retryable: true,
+      },
+    });
+  });
 });

@@ -170,4 +170,64 @@ describe("ApiAgentModel", () => {
       requestId: "request-1",
     });
   });
+
+  it("maps protocol EOF to a stable model error without local terminal tracking", async () => {
+    const encoder = new TextEncoder();
+    const model = createApiAgentModel({
+      baseUrl: "/api/v1",
+      fetchImpl: async (_input, init) => {
+        const requestBody = JSON.parse(String(init?.body)) as {
+          assistantMessageId: string;
+          sessionId: string;
+          userMessageId: string;
+          runId: string;
+        };
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "start",
+                    messageId: requestBody.assistantMessageId,
+                    messageMetadata: {
+                      sessionId: requestBody.sessionId,
+                      runId: requestBody.runId,
+                      userMessageId: requestBody.userMessageId,
+                    },
+                  })}\n\n`,
+                ),
+              );
+              controller.close();
+            },
+          }),
+          { status: 200 },
+        );
+      },
+    });
+    const [created] = await model.createSession({
+      clientRequestId: "request-1",
+    });
+
+    const [result, error] = await model.sendMessage(
+      {
+        sessionId: created!.session.id,
+        clientRequestId: "send-1",
+        message: {
+          id: "message-1",
+          role: "user",
+          parts: [{ type: "text", text: "你好" }],
+        },
+        signal: new AbortController().signal,
+      },
+      { onStarted: () => undefined, onSnapshot: () => undefined },
+    );
+
+    expect(result).toBeNull();
+    expect(error).toMatchObject({
+      code: "PROTOCOL_UNEXPECTED_EOF",
+      kind: "protocol",
+      retryable: true,
+    });
+  });
 });

@@ -1,9 +1,6 @@
 import type { AgentSendInput } from "@/models/agentContracts";
 import type { AgentModel } from "@/models/agentModel";
-import {
-  agentStreamUnexpectedEnd,
-  readAgentStream,
-} from "@/models/agentStreamProtocol";
+import { readAgentStream } from "@/models/agentStreamProtocol";
 import {
   agentRequestError,
   sendAgentStream,
@@ -50,19 +47,12 @@ async function* streamAssistantText({
     fetchImpl,
   });
 
-  let finished = false;
   for await (const event of readAgentStream(body)) {
     if (event.type === "text-delta") {
       yield event.delta;
     } else if (event.type === "error") {
       throw agentRequestError(event.error);
-    } else {
-      finished = true;
     }
-  }
-
-  if (!finished) {
-    throw agentStreamUnexpectedEnd();
   }
 }
 
