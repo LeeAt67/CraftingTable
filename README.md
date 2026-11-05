@@ -1,6 +1,6 @@
 # CraftingTable
 
-CraftingTable 是一个单用户个人事务工作台。当前仓库保留 React、TypeScript、Vite 原型和临时 Fastify/SQLite 实现；目标架构是 Desktop 优先、本地优先、Go 模块化单体后端和共享 React 前端。
+CraftingTable 是一个单用户个人事务工作台。当前仓库使用 React、TypeScript、Vite、ShadcnUI、Zustand 和 Go 模块化单体后端；运行数据保存在本地 SQLite。
 
 `leeat` 是当前唯一用户的标识，不作为项目名、产品名或领域模型前缀。
 
@@ -11,7 +11,7 @@ CraftingTable 是一个单用户个人事务工作台。当前仓库保留 React
 - Agent 会话工作区、独立会话侧栏和流式消息界面。
 - 一级导航、二级侧边栏和响应式布局。
 
-Agent 在开发模式通过服务端 `/api/v1/agent/stream` 连接 OpenAI 兼容模型；浏览器不会读取模型 API Key。测试与 E2E 固定使用 `FakeAgentModel`，以保证结果可重复。
+Agent 在开发模式通过 Go 服务端的 `/api/v1/agent/stream` 连接 OpenAI 兼容模型；浏览器不会读取模型 API Key。Vitest 和 Playwright 固定使用 `FakeAgentModel`，Go 集成测试使用 loopback Fake Provider，以保证结果可重复。
 
 相关文档：
 
@@ -28,7 +28,7 @@ Agent 在开发模式通过服务端 `/api/v1/agent/stream` 连接 OpenAI 兼容
 
 - 平台顺序：Desktop -> Web -> 手机。
 - 前端：React、TypeScript、Vite、ShadcnUI、Zustand、MVC。
-- 后端：Go 模块化单体，Desktop 使用 SQLite，Web 存储和横向扩展方案在进入 Web 实施前通过架构决策记录确定。
+- 后端：Go 1.26 模块化单体，标准库 `net/http`，Desktop 使用 SQLite，Web 存储和横向扩展方案在进入 Web 实施前通过架构决策记录确定。
 - Agent：单 Agent 起步，预留工具、Skills、MCP、多 Agent 和评测扩展点。
 - 前端 Model 边界返回 `Result<T>`，Zustand 是业务状态唯一事实源。
 - 产品行为、API、契约和桌面验收测试统一位于 `tests/e2e`。
@@ -112,9 +112,11 @@ Copy-Item .env.example .env.local
 pnpm dev
 pnpm typecheck
 pnpm test
+pnpm test:go
 pnpm test:e2e
+pnpm build
 ```
 
-`.env.local` 已被 Git 忽略，`.env.example` 只保留非敏感默认值。开发模式默认通过临时 Fastify 服务调用真实模型；需要无网络调试时，可在本地环境显式设置 `VITE_AGENT_SOURCE=fake`。
+`.env.local` 已被 Git 忽略，`.env.example` 只保留非敏感默认值。开发模式通过 `go run ./server/cmd/craftingtabled -env-file=.env.local` 启动后端；需要无网络调试时，可在本地环境显式设置 `VITE_AGENT_SOURCE=fake`。
 
-当前 Agent 会话和消息仍保存在浏览器进程内，刷新页面不会恢复。Go sidecar、SQLite 会话持久化、Electron IPC、身份系统和生产级流恢复仍属于后续实施阶段。
+当前 Agent 会话和消息仍保存在浏览器进程内，刷新页面不会恢复。SQLite 会话持久化、Electron IPC、身份系统和生产级流恢复仍属于后续实施阶段。

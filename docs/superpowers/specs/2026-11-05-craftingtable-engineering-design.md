@@ -47,7 +47,7 @@
 - Agent 流式协议能够独立测试，不依赖真实模型。
 - 产品行为、API、契约和桌面验收测试统一放在 `tests/e2e`。
 - 设计系统、日志安全和文档链接有自动检查入口。
-- 首个可交付版本是 Windows Desktop，Go sidecar 同时承载今日和 Agent；现有 Fastify 原型只作为迁移期间的对照实现。
+- 首个可交付版本是 Windows Desktop，Go sidecar 同时承载今日和 Agent；Fastify 原型只作为迁移期间的历史对照实现。
 
 ### 3.2 阶段边界
 
@@ -609,9 +609,9 @@ pnpm build
 2. 迁移今日现有读写接口，并以现有浏览器行为作为回归基线。
 3. 用 Go Repository 和 Fake Runtime 完成 Agent 会话、消息、Run 和 SSE。
 4. 接入 Electron 主进程代理和固定路径 preload 桥。
-5. 前端从 Fastify 原型切换到 Go API；Today 回归通过后才删除旧 API。
+5. 前端从 Fastify 原型切换到 Go API；Today 回归通过后删除旧 API。
 
-现有 Fastify 原型不作为目标架构的一部分。若原型中存在需要保留的用户数据，必须在切换前单独编写导出、导入和校验步骤；没有数据校验通过，就不能声称迁移无损。
+Fastify 原型已由 Go 服务替换，不属于目标架构。若旧原型中存在需要保留的用户数据，必须在后续数据结构变化前单独编写导出、导入和校验步骤；没有数据校验通过，就不能声称迁移无损。
 
 ## 17. 架构决策门
 
