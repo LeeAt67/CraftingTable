@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/leeat/craftingtable/server/internal/agent/access"
+	"github.com/leeat/craftingtable/server/internal/agent/core"
 	"github.com/leeat/craftingtable/server/internal/agent/provider"
 	"github.com/leeat/craftingtable/server/internal/platform/config"
 	"github.com/leeat/craftingtable/server/internal/platform/httpapi"
@@ -75,9 +76,6 @@ func run() error {
 	}
 	defer sqliteStore.Close()
 
-	router := httpapi.NewRouter(logger)
-	today.NewController(sqliteStore, logger).Register(router)
-
 	agentConfig := provider.OpenAICompatibleConfig{
 		BaseURL: firstEnvironment(
 			"CRAFTINGTABLE_AGENT_BASE_URL",
@@ -93,9 +91,22 @@ func run() error {
 		),
 		SystemPrompt: os.Getenv("CRAFTINGTABLE_AGENT_SYSTEM_PROMPT"),
 	}
-	var streamProvider provider.StreamProvider
+	var streamProvider core.StreamProvider
 	if agentConfig.Configured() {
 		streamProvider = provider.NewOpenAICompatible(agentConfig)
+	}
+
+	agentService := core.NewService(sqliteStore, streamProvider, logger)
+	if err := agentService.Recover(context.Background()); err != nil {
+		return fmt.Errorf("recover agent runs: %w", err)
+	}
+
+	router := httpapi.NewRouter(logger)
+	today.NewController(sqliteStore, logger).Register(router)
+	access.NewSessionController(agentService, logger).Register(router)
+	access.NewRunController(agentService, logger).Register(router)
+	if os.Getenv("CRAFTINGTABLE_TEST_HOOKS") == "1" {
+		access.NewTestController(agentService, logger).Register(router)
 	}
 	access.NewController(streamProvider, logger).Register(router)
 

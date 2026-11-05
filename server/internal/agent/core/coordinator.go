@@ -113,6 +113,15 @@ func (c *Coordinator) Cancel(runID string) error {
 	return nil
 }
 
+func (c *Coordinator) RemoveJournal(runID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if active, exists := c.runs[runID]; exists {
+		active.journal.Close()
+		delete(c.runs, runID)
+	}
+}
+
 func (c *Coordinator) Recover(ctx context.Context) error {
 	_, err := c.repository.RecoverInterruptedAgentRuns(ctx)
 	return err

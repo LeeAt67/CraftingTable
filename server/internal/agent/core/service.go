@@ -148,8 +148,19 @@ func (s *Service) SubscribeRun(
 	return s.coordinator.Subscribe(runID, after)
 }
 
+func (s *Service) GetRun(
+	ctx context.Context,
+	runID string,
+) (domain.Run, error) {
+	return s.repository.GetAgentRun(ctx, runID)
+}
+
 func (s *Service) Recover(ctx context.Context) error {
 	return s.coordinator.Recover(ctx)
+}
+
+func (s *Service) RemoveRunJournal(runID string) {
+	s.coordinator.RemoveJournal(runID)
 }
 
 func handleFromExecution(execution domain.RunExecution) domain.RunHandle {

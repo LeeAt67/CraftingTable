@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -43,17 +44,29 @@ func TestMain(m *testing.M) {
 
 type testServer struct {
 	baseURL string
+	command *exec.Cmd
+	close   sync.Once
 }
 
 func startServer(t *testing.T, agentBaseURL string) *testServer {
 	t.Helper()
+	return startServerWithDatabase(
+		t,
+		agentBaseURL,
+		filepath.Join(t.TempDir(), "craftingtable.sqlite"),
+	)
+}
 
+func startServerWithDatabase(
+	t *testing.T,
+	agentBaseURL string,
+	databasePath string,
+) *testServer {
+	t.Helper()
 	port := freePort(t)
-	databasePath := filepath.Join(t.TempDir(), "craftingtable.sqlite")
 	command := exec.Command(
 		serverBinary,
 		"-env-file="+filepath.Join(t.TempDir(), "missing.env"),
-		"-reset-database",
 	)
 	command.Dir = repositoryRoot()
 	var output bytes.Buffer
@@ -62,6 +75,7 @@ func startServer(t *testing.T, agentBaseURL string) *testServer {
 	command.Env = isolatedEnvironment(map[string]string{
 		"API_PORT":                     fmt.Sprintf("%d", port),
 		"CRAFTINGTABLE_DATABASE_PATH":  databasePath,
+		"CRAFTINGTABLE_TEST_HOOKS":     "1",
 		"CRAFTINGTABLE_AGENT_BASE_URL": agentBaseURL,
 		"CRAFTINGTABLE_AGENT_API_KEY":  "integration-secret",
 		"CRAFTINGTABLE_AGENT_MODEL":    "integration-model",
@@ -70,29 +84,32 @@ func startServer(t *testing.T, agentBaseURL string) *testServer {
 		command.Env = isolatedEnvironment(map[string]string{
 			"API_PORT":                    fmt.Sprintf("%d", port),
 			"CRAFTINGTABLE_DATABASE_PATH": databasePath,
+			"CRAFTINGTABLE_TEST_HOOKS":    "1",
 		})
 	}
 	if err := command.Start(); err != nil {
 		t.Fatalf("start server: %v", err)
 	}
+	server := &testServer{
+		baseURL: fmt.Sprintf("http://127.0.0.1:%d", port),
+		command: command,
+	}
 	t.Cleanup(func() {
-		if command.Process != nil {
-			_ = command.Process.Kill()
-		}
-		_ = command.Wait()
+		server.Close()
 		if t.Failed() {
 			t.Logf("server output:\n%s", output.String())
 		}
 	})
 
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		response, err := (&http.Client{Timeout: time.Second}).Get(baseURL + "/healthz")
+		response, err := (&http.Client{Timeout: time.Second}).Get(
+			server.URL("/healthz"),
+		)
 		if err == nil {
 			_ = response.Body.Close()
 			if response.StatusCode == http.StatusOK {
-				return &testServer{baseURL: baseURL}
+				return server
 			}
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -103,6 +120,15 @@ func startServer(t *testing.T, agentBaseURL string) *testServer {
 
 func (s *testServer) URL(path string) string {
 	return s.baseURL + path
+}
+
+func (s *testServer) Close() {
+	s.close.Do(func() {
+		if s.command != nil && s.command.Process != nil {
+			_ = s.command.Process.Kill()
+			_ = s.command.Wait()
+		}
+	})
 }
 
 func requestJSON[T any](
@@ -174,6 +200,7 @@ func isolatedEnvironment(overrides map[string]string) []string {
 		"CRAFTINGTABLE_AGENT_API_KEY":       {},
 		"CRAFTINGTABLE_AGENT_MODEL":         {},
 		"CRAFTINGTABLE_AGENT_SYSTEM_PROMPT": {},
+		"CRAFTINGTABLE_TEST_HOOKS":          {},
 	}
 	environment := make([]string, 0, len(os.Environ())+len(overrides))
 	for _, value := range os.Environ() {
