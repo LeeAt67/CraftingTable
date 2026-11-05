@@ -1,0 +1,99 @@
+.doc-prose {
+  min-height: 320px;
+  outline: none;
+  color: var(--textBody);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.doc-prose > * + * {
+  margin-top: 0.9em;
+}
+
+.doc-prose h1,
+.doc-prose h2,
+.doc-prose h3 {
+  color: var(--textPrimary);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.doc-prose h1 {
+  font-size: 1.6em;
+  margin-top: 1.6em;
+}
+
+.doc-prose h2 {
+  font-size: 1.3em;
+  margin-top: 1.4em;
+}
+
+.doc-prose h3 {
+  font-size: 1.1em;
+  margin-top: 1.2em;
+}
+
+.doc-prose strong {
+  color: var(--textPrimary);
+  font-weight: 600;
+}
+
+.doc-prose a {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.doc-prose code {
+  border-radius: 4px;
+  background: var(--surfaceSubtle);
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
+
+.doc-prose pre {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surfaceSubtle);
+  padding: 12px 14px;
+}
+
+.doc-prose pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.85em;
+}
+
+.doc-prose blockquote {
+  border-left: 3px solid var(--border);
+  color: var(--textSecondary);
+  padding-left: 12px;
+}
+
+.doc-prose ul,
+.doc-prose ol {
+  padding-left: 1.4em;
+}
+
+.doc-prose ul {
+  list-style: disc;
+}
+
+.doc-prose ol {
+  list-style: decimal;
+}
+
+.doc-prose hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+.doc-prose p.is-editor-empty:first-child::before {
+  color: var(--textSecondary);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
