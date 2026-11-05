@@ -7,6 +7,10 @@
 工程规范：[CraftingTable 工程化设计规范](../superpowers/specs/2026-11-05-craftingtable-engineering-design.md)
 术语基线：[CraftingTable 术语表](../glossary.md)
 
+## 决策记录
+
+- [ADR-001 Agent Run Recovery](./ADR-001-agent-run-recovery.md)
+
 ## 系统架构
 
 ![CraftingTable Agent 系统架构](./agent-system-architecture.png)
