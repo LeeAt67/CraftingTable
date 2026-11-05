@@ -50,6 +50,12 @@
 | 状态回填 | `hydrate` | 从服务端加载持久化数据并写入前端 Store。 |
 | 业务状态源 | `sourceOfTruth` | 页面渲染真正信任的唯一状态来源。 |
 | 双源 | `dualSource` | 两个位置同时保存并且都能修改同一份状态，可能导致状态不一致。 |
+| 文档节点 | `DocNode` | 文档工作区中的一个目录节点，`kind` 为 `folder` 或 `document`；同表自引用形成目录树。 |
+| 文件夹 | `folder` | `kind` 为 `folder` 的 `DocNode`，没有正文，只能作为其他节点的父节点。 |
+| 文档 | `document` | `kind` 为 `document` 的 `DocNode`，正文以 Markdown 字符串保存在 `content`。 |
+| 目录树 | `docTree` | 由 `parentId` 自引用组织的节点层级；首版界面只展开两级。 |
+| 软删除 | `deletedAt` | 只写入删除时间而不物理移除记录；所有查询默认过滤已软删除节点。 |
+| 文档搜索命中 | `SearchHit` | 服务端搜索返回的单条结果，包含标题、类型、父节点和祖先路径，不含正文。 |
 
 ## 3. Agent 会话状态
 
