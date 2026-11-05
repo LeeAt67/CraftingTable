@@ -1,6 +1,6 @@
 # CraftingTable Agent Stream State Machine Design
 
-- **Status:** Proposed for review
+- **Status:** Implemented and verified on 2026-11-05
 - **Date:** 2026-11-05
 - **Scope:** Agent 前端流协议内部结构
 **Depends on:** [工程化设计规范](./2026-11-05-craftingtable-engineering-design.md)、[Agent 设计](./2026-11-05-craftingtable-agent-design.md)
@@ -316,3 +316,12 @@ Design Spec
 ```
 
 未通过用户评审前，不创建生产实现。实施中若发现设计不成立，先更新本设计或新增 ADR，再继续编码。
+
+## 16. Implementation Record
+
+- Schema Parser: `src/models/agentStreamSchema.ts`.
+- Pure Reducer: `src/models/agentStreamReducer.ts`.
+- SSE Adapter: `src/models/agentStreamProtocol.ts`.
+- Domain adapter: `src/models/apiAgentModel.ts`.
+- Protocol tests: `tests/e2e/unit/agent/agentStreamSchema.test.ts`, `agentStreamReducer.test.ts`, `agentStreamProtocol.test.ts`.
+- Full verification passed with `pnpm test`, `pnpm build`, `pnpm test:go`, `go vet ./server/...`, `gofmt -d`, and `git diff --check`.
