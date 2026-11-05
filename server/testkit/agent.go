@@ -41,17 +41,20 @@ var MigrationContent = store.MigrationContent
 var MigrationChecksum = store.MigrationChecksum
 
 const (
-	RunCompleted    = domain.RunCompleted
-	RunRunning      = domain.RunRunning
-	RunInterrupted  = domain.RunInterrupted
-	MessageComplete = domain.MessageComplete
-	PartComplete    = domain.PartComplete
-	PartInterrupted = domain.PartInterrupted
-	PartText        = domain.PartText
-	PartReasoning   = domain.PartReasoning
-	PartError       = domain.PartError
-	StreamTextDelta = core.StreamTextDelta
-	StreamFinish    = core.StreamFinish
+	RunCompleted         = domain.RunCompleted
+	RunRunning           = domain.RunRunning
+	RunInterrupted       = domain.RunInterrupted
+	MessageComplete      = domain.MessageComplete
+	PartComplete         = domain.PartComplete
+	PartInterrupted      = domain.PartInterrupted
+	PartText             = domain.PartText
+	PartReasoning        = domain.PartReasoning
+	PartError            = domain.PartError
+	StreamReasoningStart = core.StreamReasoningStart
+	StreamReasoningDelta = core.StreamReasoningDelta
+	StreamReasoningEnd   = core.StreamReasoningEnd
+	StreamTextDelta      = core.StreamTextDelta
+	StreamFinish         = core.StreamFinish
 )
 
 var (

@@ -16,6 +16,7 @@ const subscriberBuffer = 16
 type JournalSnapshot struct {
 	Chunks       []StreamChunk
 	Text         string
+	Reasoning    string
 	LastSequence int
 }
 
@@ -30,6 +31,7 @@ type EventJournal struct {
 	bytes        int64
 	nextSequence int
 	text         []byte
+	reasoning    []byte
 	chunks       []StreamChunk
 	subscribers  map[uint64]*journalSubscriber
 	nextID       uint64
@@ -66,6 +68,9 @@ func (j *EventJournal) Append(chunk StreamChunk) error {
 	if chunk.Kind == StreamTextDelta {
 		j.text = append(j.text, chunk.Text...)
 	}
+	if chunk.Kind == StreamReasoningDelta {
+		j.reasoning = append(j.reasoning, chunk.Text...)
+	}
 	for id, subscriber := range j.subscribers {
 		if subscriber.closed {
 			delete(j.subscribers, id)
@@ -88,6 +93,7 @@ func (j *EventJournal) Snapshot() JournalSnapshot {
 	return JournalSnapshot{
 		Chunks:       chunks,
 		Text:         string(j.text),
+		Reasoning:    string(j.reasoning),
 		LastSequence: j.nextSequence - 1,
 	}
 }
