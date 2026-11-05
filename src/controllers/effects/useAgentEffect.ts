@@ -140,6 +140,11 @@ export function createAgentEffect(
   };
 
   const loadSession = async (sessionId: string) => {
+    const stateAtStart = useAgentStore.getState();
+    const startedDuringLocalRun =
+      stateAtStart.liveRun?.sessionId === sessionId ||
+      (stateAtStart.activeSessionId === sessionId &&
+        stateAtStart.sendPhase === "submitting");
     const generation = ++loadGeneration;
     try {
       const result = await model.getSession(sessionId);
@@ -148,10 +153,19 @@ export function createAgentEffect(
       }
       const [detail, error] = result;
       if (error) {
+        if (startedDuringLocalRun) {
+          return result;
+        }
         reportFailure(error);
         return result;
       }
       const state = useAgentStore.getState();
+      if (startedDuringLocalRun) {
+        state.upsertSession(detail.session);
+        state.setActiveSession(detail.session.id);
+        state.setError(null);
+        return result;
+      }
       state.upsertSession(detail.session);
       state.setSessionMessages(
         detail.session.id,
@@ -369,6 +383,7 @@ export function createAgentEffect(
       reportFailure(error);
       return [null, error] as const;
     }
+    loadGeneration += 1;
 
     const timestamp = now();
     const userMessage: AgentMessage = {
@@ -453,6 +468,7 @@ export function createAgentEffect(
       reportFailure(error);
       return [null, error] as const;
     }
+    loadGeneration += 1;
 
     const target = state.messagesBySessionId[sessionId]?.at(-1);
     if (

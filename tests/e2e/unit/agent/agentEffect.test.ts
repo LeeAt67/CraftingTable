@@ -136,7 +136,18 @@ describe("AgentEffect", () => {
       sessionA!.session.id,
     );
 
-    useAgentStore.getState().setActiveSession(sessionA!.session.id);
+    await effect.loadSession(sessionA!.session.id);
+
+    expect(useAgentStore.getState().activeSessionId).toBe(
+      sessionA!.session.id,
+    );
+    expect(
+      useAgentStore.getState().messagesBySessionId[sessionA!.session.id],
+    ).toHaveLength(2);
+    expect(useAgentStore.getState().liveRun?.sessionId).toBe(
+      sessionA!.session.id,
+    );
+
     await effect.cancelRun();
     await sending;
   });
@@ -269,6 +280,152 @@ describe("AgentEffect", () => {
     expect(useAgentStore.getState().activeSessionId).toBe(
       sessionB!.session.id,
     );
+  });
+
+  it("does not let a pending session load replace a run started after it", async () => {
+    const base = createFakeAgentModel({ chunkDelayMs: 0 });
+    const [created] = await base.createSession({ clientRequestId: "race" });
+    let resolveLoad:
+      | ((result: Awaited<ReturnType<AgentModel["getSession"]>>) => void)
+      | undefined;
+    let finishSend:
+      | ((result: Awaited<ReturnType<AgentModel["sendMessage"]>>) => void)
+      | undefined;
+    let loadCalls = 0;
+    const model: AgentModel = {
+      ...base,
+      getSession: (sessionId) => {
+        loadCalls += 1;
+        if (loadCalls === 1) {
+          return new Promise((resolve) => {
+            resolveLoad = resolve;
+          });
+        }
+        return base.getSession(sessionId);
+      },
+      sendMessage: async (_input, handlers) =>
+        new Promise((resolve) => {
+          handlers.onStarted({
+            assistantMessageId: "assistant-race",
+            runId: "run-race",
+            status: "running",
+          });
+          finishSend = resolve;
+        }),
+    };
+    const effect = createAgentEffect(model, { success: () => undefined });
+    useAgentStore.getState().upsertSession(created!.session);
+    useAgentStore.getState().setActiveSession(created!.session.id);
+
+    const loading = effect.loadSession(created!.session.id);
+    const sending = effect.sendMessage("加载期间发送");
+    await waitFor(() => {
+      expect(useAgentStore.getState().liveRun).toEqual({
+        sessionId: created!.session.id,
+        runId: "run-race",
+      });
+    });
+
+    resolveLoad?.([
+      {
+        session: created!.session,
+        messages: [],
+        messageParts: [],
+        activeRun: null,
+        nextMessageCursor: null,
+      },
+      null,
+    ]);
+    await loading;
+
+    expect(
+      useAgentStore.getState().messagesBySessionId[created!.session.id],
+    ).toHaveLength(2);
+    expect(useAgentStore.getState().liveRun).toEqual({
+      sessionId: created!.session.id,
+      runId: "run-race",
+    });
+
+    finishSend?.([
+      {
+        assistantMessageId: "assistant-race",
+        runId: "run-race",
+        status: "completed",
+      },
+      null,
+    ]);
+    await sending;
+  });
+
+  it("ignores a session load started while a message is submitting", async () => {
+    const base = createFakeAgentModel({ chunkDelayMs: 0 });
+    const [created] = await base.createSession({
+      clientRequestId: "submitting-race",
+    });
+    let resolveLoad:
+      | ((result: Awaited<ReturnType<AgentModel["getSession"]>>) => void)
+      | undefined;
+    let startSend: (() => void) | undefined;
+    let finishSend:
+      | ((result: Awaited<ReturnType<AgentModel["sendMessage"]>>) => void)
+      | undefined;
+    let loadCalls = 0;
+    const model: AgentModel = {
+      ...base,
+      getSession: (sessionId) => {
+        loadCalls += 1;
+        if (loadCalls === 1) {
+          return new Promise((resolve) => {
+            resolveLoad = resolve;
+          });
+        }
+        return base.getSession(sessionId);
+      },
+      sendMessage: async (_input, handlers) =>
+        new Promise((resolve) => {
+          startSend = () =>
+            handlers.onStarted({
+              assistantMessageId: "assistant-submitting",
+              runId: "run-submitting",
+              status: "running",
+            });
+          finishSend = resolve;
+        }),
+    };
+    const effect = createAgentEffect(model, { success: () => undefined });
+    useAgentStore.getState().upsertSession(created!.session);
+    useAgentStore.getState().setActiveSession(created!.session.id);
+
+    const sending = effect.sendMessage("提交期间发送");
+    expect(useAgentStore.getState().sendPhase).toBe("submitting");
+    const loading = effect.loadSession(created!.session.id);
+    resolveLoad?.([
+      {
+        session: created!.session,
+        messages: [],
+        messageParts: [],
+        activeRun: null,
+        nextMessageCursor: null,
+      },
+      null,
+    ]);
+    await loading;
+
+    expect(
+      useAgentStore.getState().messagesBySessionId[created!.session.id],
+    ).toHaveLength(1);
+    expect(useAgentStore.getState().sendPhase).toBe("submitting");
+
+    startSend?.();
+    finishSend?.([
+      {
+        assistantMessageId: "assistant-submitting",
+        runId: "run-submitting",
+        status: "completed",
+      },
+      null,
+    ]);
+    await sending;
   });
 
   it("reuses one effect for components using the same model", async () => {
