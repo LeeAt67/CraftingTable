@@ -27,11 +27,12 @@ type itemResponse struct {
 }
 
 type apiError struct {
-	Code      string `json:"code"`
-	Kind      string `json:"kind"`
-	Message   string `json:"message"`
-	Retryable bool   `json:"retryable"`
-	RequestID string `json:"requestId"`
+	Code      string         `json:"code"`
+	Kind      string         `json:"kind"`
+	Message   string         `json:"message"`
+	Retryable bool           `json:"retryable"`
+	RequestID string         `json:"requestId"`
+	Details   map[string]any `json:"details"`
 }
 
 type categoriesEnvelope struct {

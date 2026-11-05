@@ -53,6 +53,10 @@ func (j *EventJournal) Append(chunk StreamChunk) error {
 	}
 	size := int64(len(chunk.Text) + 128)
 	if j.maxBytes > 0 && j.bytes+size > j.maxBytes {
+		j.closed = true
+		for id, subscriber := range j.subscribers {
+			j.closeSubscriberLocked(id, subscriber)
+		}
 		return ErrJournalFull
 	}
 	chunk.Sequence = j.nextSequence

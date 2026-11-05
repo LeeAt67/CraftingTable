@@ -1,8 +1,10 @@
 import {
   embeddedAgentError,
   type AgentError,
+  type AgentMessageStatus,
   type AgentMessageSnapshot,
   type AgentRunHandle,
+  type AgentRunStatus,
   type AgentSendHandlers,
   type AgentSendResult,
   type AgentSessionDetail,
@@ -81,6 +83,8 @@ async function consumeStartedRun(
     ...input,
     assistantMessageId: handle.assistantMessageId,
     materializer: materializerFromHandle(handle),
+    recreateMaterializer: (snapshot) =>
+      materializerFromSnapshot(handle.runId, snapshot),
   });
 }
 
@@ -88,6 +92,9 @@ function activeAssistantSnapshot(
   detail: AgentSessionDetail,
   runId: string,
 ): AgentMessageSnapshot | null {
+  if (detail.activeRun?.runId !== runId) {
+    return null;
+  }
   const message =
     (detail.activeRun?.assistantMessageId
       ? detail.messages.find(
@@ -104,8 +111,113 @@ function activeAssistantSnapshot(
   }
   return {
     message,
-    parts: detail.messageParts.filter((part) => part.messageId === message.id),
+    parts: detail.messageParts.filter(
+      (part) => part.messageId === message.id && part.runId === runId,
+    ),
   };
+}
+
+function statusFromPersistedMessage(status: AgentMessageStatus): AgentRunStatus {
+  switch (status) {
+    case "complete":
+      return "completed";
+    case "streaming":
+      return "running";
+    default:
+      return status;
+  }
+}
+
+async function recoverStartedRun(input: {
+  baseUrl: string;
+  fetchImpl: AgentFetch;
+  sessionId: string;
+  userMessageId?: string;
+  assistantMessageId?: string;
+  previousRunId?: string;
+  expectedRunId?: string;
+  signal: AbortSignal;
+  handlers: AgentSendHandlers;
+}): Promise<Result<AgentSendResult> | null> {
+  let detail: AgentSessionDetail;
+  try {
+    detail = await getAgentSession(
+      input.baseUrl,
+      input.sessionId,
+      input.fetchImpl,
+    );
+  } catch (cause) {
+    return [
+      null,
+      modelError(cause, "NETWORK_ERROR", "恢复 Agent 运行失败"),
+    ];
+  }
+  const message = input.assistantMessageId
+    ? detail.messages.find(
+        (candidate) => candidate.id === input.assistantMessageId,
+      )
+    : input.userMessageId
+      ? detail.messages.find(
+          (candidate) =>
+            candidate.role === "assistant" &&
+            candidate.userMessageId === input.userMessageId,
+        )
+      : detail.activeRun?.assistantMessageId
+        ? detail.messages.find(
+            (candidate) =>
+              candidate.id === detail.activeRun?.assistantMessageId,
+          )
+        : undefined;
+  if (!message) {
+    return null;
+  }
+  const runId = message.activeRunId ?? detail.activeRun?.runId;
+  if (!runId) {
+    return null;
+  }
+  if (
+    (input.expectedRunId && runId !== input.expectedRunId) ||
+    (input.previousRunId && runId === input.previousRunId)
+  ) {
+    return null;
+  }
+  const snapshot = {
+    message,
+    parts: detail.messageParts.filter(
+      (part) => part.messageId === message.id && part.runId === runId,
+    ),
+  };
+  const status = statusFromPersistedMessage(message.status);
+  input.handlers.onStarted({
+    assistantMessageId: message.id,
+    runId,
+    status,
+  });
+  input.handlers.onSnapshot(snapshot);
+  if (status !== "running") {
+    return [
+      {
+        assistantMessageId: message.id,
+        runId,
+        status,
+      },
+      null,
+    ];
+  }
+  return consumeAgentRun({
+    baseUrl: input.baseUrl,
+    fetchImpl: input.fetchImpl,
+    sessionId: input.sessionId,
+    runId,
+    assistantMessageId: message.id,
+    afterSequence:
+      detail.activeRun?.runId === runId ? detail.activeRun.lastSequence : 0,
+    signal: input.signal,
+    materializer: materializerFromSnapshot(runId, snapshot),
+    recreateMaterializer: (recovered) =>
+      materializerFromSnapshot(runId, recovered),
+    handlers: input.handlers,
+  });
 }
 
 export function createApiAgentModel(
@@ -159,79 +271,113 @@ export function createApiAgentModel(
     },
 
     async sendMessage(input, handlers: AgentSendHandlers) {
+      let handle: AgentRunHandle;
       try {
-        const handle = await startAgentRun({
+        handle = await startAgentRun({
           baseUrl,
           sessionId: input.sessionId,
           clientRequestId: input.clientRequestId,
           message: input.message,
           fetchImpl,
         });
-        handlers.onStarted({
-          assistantMessageId: handle.assistantMessageId,
-          runId: handle.runId,
-          status: handle.status,
-        });
-        const materializer = materializerFromHandle(handle);
-        handlers.onSnapshot(
-          materializer.start(handle, new Date().toISOString()),
+      } catch (cause) {
+        const error = modelError(
+          cause,
+          "AGENT_RUN_START_FAILED",
+          "启动 Agent 运行失败",
         );
-        return consumeStartedRun(
-          {
+        if (error.retryable || error.code === "AGENT_REQUEST_ALREADY_PROCESSED") {
+          const recovered = await recoverStartedRun({
             baseUrl,
             fetchImpl,
             sessionId: input.sessionId,
-            runId: handle.runId,
-            afterSequence: 0,
+            userMessageId: input.message.id,
             signal: input.signal,
             handlers,
-          },
-          handle,
-        );
-      } catch (cause) {
-        return [
-          null,
-          modelError(cause, "AGENT_RUN_START_FAILED", "启动 Agent 运行失败"),
-        ];
+          });
+          if (recovered) {
+            return recovered;
+          }
+        }
+        return [null, error];
       }
+      handlers.onStarted({
+        assistantMessageId: handle.assistantMessageId,
+        runId: handle.runId,
+        status: handle.status,
+      });
+      const materializer = materializerFromHandle(handle);
+      handlers.onSnapshot(materializer.start(handle, new Date().toISOString()));
+      return consumeStartedRun(
+        {
+          baseUrl,
+          fetchImpl,
+          sessionId: input.sessionId,
+          runId: handle.runId,
+          afterSequence: 0,
+          signal: input.signal,
+          handlers,
+        },
+        handle,
+      );
     },
 
     async retryMessage(input, handlers: AgentSendHandlers) {
+      let handle: AgentRunHandle;
       try {
-        const handle = await retryAgentRun({
+        handle = await retryAgentRun({
           baseUrl,
           sessionId: input.sessionId,
           assistantMessageId: input.assistantMessageId,
           clientRequestId: input.clientRequestId,
           fetchImpl,
         });
-        handlers.onStarted({
-          assistantMessageId: handle.assistantMessageId,
-          runId: handle.runId,
-          status: handle.status,
-        });
-        const materializer = materializerFromHandle(handle);
-        handlers.onSnapshot(
-          materializer.start(handle, new Date().toISOString()),
+      } catch (cause) {
+        const error = modelError(
+          cause,
+          "AGENT_RUN_START_FAILED",
+          "重试 Agent 运行失败",
         );
-        return consumeStartedRun(
-          {
+        if (error.retryable || error.code === "AGENT_REQUEST_ALREADY_PROCESSED") {
+          const detailsRunId =
+            typeof error.details?.runId === "string"
+              ? error.details.runId
+              : undefined;
+          const recovered = await recoverStartedRun({
             baseUrl,
             fetchImpl,
             sessionId: input.sessionId,
-            runId: handle.runId,
-            afterSequence: 0,
+            assistantMessageId: input.assistantMessageId,
+            previousRunId: input.previousRunId,
+            expectedRunId: detailsRunId,
             signal: input.signal,
             handlers,
-          },
-          handle,
-        );
-      } catch (cause) {
-        return [
-          null,
-          modelError(cause, "AGENT_RUN_START_FAILED", "重试 Agent 运行失败"),
-        ];
+          });
+          if (recovered) {
+            return recovered;
+          }
+        }
+        return [null, error];
       }
+      handlers.onStarted({
+        assistantMessageId: handle.assistantMessageId,
+        runId: handle.runId,
+        status: handle.status,
+      });
+      const materializer = materializerFromHandle(handle);
+      handlers.onSnapshot(materializer.start(handle, new Date().toISOString()));
+      return consumeStartedRun(
+        {
+          baseUrl,
+          fetchImpl,
+          sessionId: input.sessionId,
+          runId: handle.runId,
+          afterSequence: 0,
+          signal: input.signal,
+          handlers,
+        },
+        handle,
+      );
     },
 
     async resumeRun(input, handlers: AgentSendHandlers) {
@@ -268,6 +414,8 @@ export function createApiAgentModel(
           afterSequence: input.afterSequence,
           signal: input.signal,
           materializer: materializerFromSnapshot(input.runId, snapshot),
+          recreateMaterializer: (recovered) =>
+            materializerFromSnapshot(input.runId, recovered),
           handlers,
         });
       } catch (cause) {

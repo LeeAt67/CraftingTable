@@ -46,6 +46,16 @@ func writeAgentStreamDone(w io.Writer) error {
 	return nil
 }
 
+func writeAgentStreamHeartbeat(w io.Writer) error {
+	if _, err := io.WriteString(w, ": keep-alive\n\n"); err != nil {
+		return fmt.Errorf("write agent stream heartbeat: %w", err)
+	}
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+	return nil
+}
+
 func uiPartFromStreamChunk(chunk core.StreamChunk) uiMessageStreamPart {
 	switch chunk.Kind {
 	case core.StreamStart:

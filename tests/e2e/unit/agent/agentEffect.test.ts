@@ -202,19 +202,26 @@ describe("AgentEffect", () => {
     });
   });
 
-  it("stops the local stream even when the cancel request fails", async () => {
+  it("keeps the live run when the cancel request fails", async () => {
     const base = createFakeAgentModel({ chunkDelayMs: 1000 });
+    let cancelAttempts = 0;
     const model: AgentModel = {
       ...base,
-      cancelRun: async () => [
-        null,
-        {
-          code: "AGENT_PROVIDER_FAILED",
-          kind: "server",
-          message: "取消请求失败",
-          retryable: true,
-        },
-      ],
+      cancelRun: async (input) => {
+        cancelAttempts += 1;
+        if (cancelAttempts === 1) {
+          return [
+            null,
+            {
+              code: "AGENT_PROVIDER_FAILED",
+              kind: "server",
+              message: "取消请求失败",
+              retryable: true,
+            },
+          ];
+        }
+        return base.cancelRun(input);
+      },
     };
     const effect = createAgentEffect(model, {
       success: () => undefined,
@@ -229,14 +236,47 @@ describe("AgentEffect", () => {
     const [, cancelError] = await effect.cancelRun();
 
     expect(cancelError?.message).toBe("取消请求失败");
-    await waitFor(
-      () => {
-        expect(useAgentStore.getState().liveRun).toBeNull();
-      },
-      { timeout: 500 },
-    );
+    expect(useAgentStore.getState().liveRun).not.toBeNull();
+    expect(useAgentStore.getState().sendPhase).toBe("streaming");
+
+    await effect.cancelRun();
     const [result] = await sending;
     expect(result?.status).toBe("cancelled");
+    expect(useAgentStore.getState().liveRun).toBeNull();
+  });
+
+  it("keeps the live run when stream recovery returns a network error", async () => {
+    const base = createFakeAgentModel({ chunkDelayMs: 0 });
+    const model: AgentModel = {
+      ...base,
+      sendMessage: async (_input, handlers) => {
+        handlers.onStarted({
+          assistantMessageId: "assistant-1",
+          runId: "run-1",
+          status: "running",
+        });
+        return [
+          null,
+          {
+            code: "NETWORK_ERROR",
+            kind: "network",
+            message: "Agent 连接中断",
+            retryable: true,
+          },
+        ];
+      },
+    };
+    const effect = createAgentEffect(model, { success: () => undefined });
+    const [created] = await effect.createSession();
+    useAgentStore.getState().setActiveSession(created!.session.id);
+
+    const [, error] = await effect.sendMessage("网络中断");
+
+    expect(error?.code).toBe("NETWORK_ERROR");
+    expect(useAgentStore.getState().liveRun).toEqual({
+      sessionId: created!.session.id,
+      runId: "run-1",
+    });
   });
 
   it("retries the failed assistant message without appending another user message", async () => {

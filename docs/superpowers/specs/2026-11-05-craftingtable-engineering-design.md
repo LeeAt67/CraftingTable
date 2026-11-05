@@ -727,3 +727,29 @@ Fastify 原型已由 Go 服务替换，不属于目标架构。若旧原型中�
 - Electron 在真实进程中通过启动、关键交互和 IPC 测试。
 - 产品行为、API、契约和桌面验收测试位于 `tests/e2e`；Go package 白盒测试只作为解释性补充。
 - 当前文档与代码事实一致，过期文档已标记状态。
+
+## 19. 当前验证基线
+
+2026-11-05 的 Agent 持久化与恢复改动已通过以下门禁：
+
+```powershell
+pnpm typecheck
+pnpm test
+go test ./server/... ./tests/e2e/integration/... ./tests/e2e/unit/agent -count=1
+go vet ./server/...
+gofmt -d
+pnpm build
+pnpm test:e2e
+git diff --check
+```
+
+验证结果：Vitest 80 个测试通过，Playwright 在桌面和移动项目中共 28 个测试通过，Go 测试、类型检查、格式检查、静态检查和生产构建通过。`pnpm build` 仍报告单个前端 chunk 超过 500 kB 的警告，这是当前性能待办，不是构建失败。
+
+Agent 恢复的实现事实：
+
+- Session 详情通过只读事务读取一致快照。
+- SSE 游标只来自进程内 Event Journal，不复用 durable RunEvent 序号。
+- 旧 Run 恢复必须校验请求 `runId`，不能读取同一助手消息后续 Run 的内容。
+- 完成、取消和超时竞争只有一个终态胜出。
+- Finalize 失败回退为 `interrupted`，启动失败清理使用脱离 HTTP Context 的有界写入。
+- Go 进程重启后旧 Run 不做跨进程续传。

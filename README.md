@@ -13,6 +13,10 @@ CraftingTable 是一个单用户个人事务工作台。当前仓库使用 React
 
 Agent 的 Session、Message、Part、Run 和生命周期事件保存在本地 SQLite，模型 Key 只存在于 Go 服务端。浏览器通过 `/api/v1/agent/session/*`、`/agent/message/*` 和带游标的 `/agent/run/stream` 使用 Go 服务；刷新页面后可以恢复历史，并继续订阅仍在 Go 进程内执行的 Run。前端由 `agentTransport.ts`、`eventsource-parser`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 组成三层 pipe-through。
 
+每次 Agent Run 最长执行 120 秒，Provider 连续 30 秒没有可观察输出时判定超时；SSE 每 15 秒发送一次注释心跳。Run 终态使用独立于 HTTP 请求的有限时长 context 和有限重试写入，失败时回退为 `interrupted`。SQLite 迁移由 `schema_migrations` 账本记录文件名与 SHA-256，已应用迁移的内容发生变化时拒绝启动。
+
+创建会话、发送消息和重试都使用持久化 `clientRequestId`。相同请求标识和相同摘要再次提交时，运行中的 Run 返回 `AGENT_SESSION_BUSY`，已终态的 Run 返回 `AGENT_REQUEST_ALREADY_PROCESSED`；相同标识对应不同内容时返回 `AGENT_REQUEST_ID_CONFLICT`。幂等重放不会重新启动或终结原 Run。
+
 自动化测试不调用真实模型。Vitest 使用可控 Fake Model，Playwright 使用持久化 Go API 和 loopback OpenAI-compatible Fake Provider，Go 集成测试同样使用 loopback Fake Provider，以保证结果可重复。
 
 相关文档：
@@ -51,7 +55,8 @@ Agent 的 Session、Message、Part、Run 和生命周期事件保存在本地 SQ
 
 - 浏览器断开不会自动终止服务端正在执行的 Run。
 - 页面刷新或短暂断线时，前端使用 `runId + lastSequence` 恢复同一 Run 的 SSE 订阅。
-- 服务端进程重启后，遗留的 `running` 或 `queued` Run 标记为 `interrupted`。
+- 实时 Event Journal 超过 8 MiB 后关闭；客户端重新读取 Session 详情并以数据库终态对账。
+- 服务端进程重启后，遗留的 `running` Run 标记为 `interrupted`。
 - 不自动恢复原 Run；用户重试时创建新的 Run，并保留原助手消息和历史 Run。
 - 已保存的 Message、MessagePart、Step 和 RunEvent 保留，不删除执行历史。
 

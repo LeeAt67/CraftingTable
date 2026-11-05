@@ -36,11 +36,23 @@ func RelayProviderStream(
 	source io.Reader,
 	sink EventSink,
 ) error {
+	return relayProviderStream(ctx, source, sink, nil)
+}
+
+func relayProviderStream(
+	ctx context.Context,
+	source io.Reader,
+	sink EventSink,
+	onActivity func(),
+) error {
 	scanner := bufio.NewScanner(source)
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
 	dataLines := make([]string, 0, 1)
 	for scanner.Scan() {
+		if onActivity != nil {
+			onActivity()
+		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}

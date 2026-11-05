@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/leeat/craftingtable/server/internal/agent/domain"
 )
@@ -23,10 +25,19 @@ type RunSnapshot struct {
 }
 
 type activeRun struct {
-	execution domain.RunExecution
-	ctx       context.Context
-	cancel    context.CancelFunc
-	journal   *EventJournal
+	execution       domain.RunExecution
+	ctx             context.Context
+	cancel          context.CancelFunc
+	journal         *EventJournal
+	terminalMu      sync.Mutex
+	cancelRequested bool
+	finishClaimed   bool
+	finishedStatus  domain.RunStatus
+	done            chan struct{}
+	idleTimedOut    atomic.Bool
+	idleMu          sync.Mutex
+	idleTimer       *time.Timer
+	idleTimeout     time.Duration
 }
 
 type Coordinator struct {
@@ -36,12 +47,14 @@ type Coordinator struct {
 	baseCtx    context.Context
 	mu         sync.RWMutex
 	runs       map[string]*activeRun
+	config     RuntimeConfig
 }
 
 func NewCoordinator(
 	repository Repository,
 	provider StreamProvider,
 	logger *slog.Logger,
+	config RuntimeConfig,
 ) *Coordinator {
 	return &Coordinator{
 		repository: repository,
@@ -49,6 +62,7 @@ func NewCoordinator(
 		logger:     logger,
 		baseCtx:    context.Background(),
 		runs:       make(map[string]*activeRun),
+		config:     normalizedRuntimeConfig(config),
 	}
 }
 
@@ -61,12 +75,17 @@ func (c *Coordinator) Start(execution domain.RunExecution) error {
 		c.mu.Unlock()
 		return ErrRunAlreadyRegistered
 	}
-	ctx, cancel := context.WithCancel(c.baseCtx)
+	ctx, cancel := context.WithTimeout(
+		c.baseCtx,
+		c.config.MaxRunDuration,
+	)
 	active := &activeRun{
-		execution: execution,
-		ctx:       ctx,
-		cancel:    cancel,
-		journal:   NewEventJournal(runJournalLimit),
+		execution:   execution,
+		ctx:         ctx,
+		cancel:      cancel,
+		journal:     NewEventJournal(runJournalLimit),
+		idleTimeout: c.config.IdleTimeout,
+		done:        make(chan struct{}),
 	}
 	c.runs[execution.Run.ID] = active
 	c.mu.Unlock()
@@ -102,15 +121,34 @@ func (c *Coordinator) Subscribe(
 	return active.journal.Subscribe(after)
 }
 
-func (c *Coordinator) Cancel(runID string) error {
+func (c *Coordinator) Cancel(
+	ctx context.Context,
+	runID string,
+) (domain.RunStatus, error) {
 	c.mu.RLock()
 	active, exists := c.runs[runID]
 	c.mu.RUnlock()
 	if !exists {
-		return ErrRunNotActive
+		return "", ErrRunNotActive
 	}
+	active.terminalMu.Lock()
+	if active.finishClaimed {
+		done := active.done
+		active.terminalMu.Unlock()
+		select {
+		case <-done:
+			active.terminalMu.Lock()
+			status := active.finishedStatus
+			active.terminalMu.Unlock()
+			return status, nil
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	active.cancelRequested = true
+	active.terminalMu.Unlock()
 	active.cancel()
-	return nil
+	return domain.RunRunning, nil
 }
 
 func (c *Coordinator) RemoveJournal(runID string) {
@@ -128,6 +166,8 @@ func (c *Coordinator) Recover(ctx context.Context) error {
 }
 
 func (c *Coordinator) execute(active *activeRun) {
+	defer close(active.done)
+	defer c.stopRun(active)
 	execution := active.execution
 	for _, chunk := range []StreamChunk{
 		{
@@ -157,17 +197,18 @@ func (c *Coordinator) execute(active *activeRun) {
 		}
 	}
 
+	active.startIdleTimer(c.config.IdleTimeout)
 	body, err := c.provider.Stream(
 		active.ctx,
 		ContextMessages(execution.Messages),
 	)
 	if err != nil {
-		c.finishFailure(active, providerFailure(err))
+		c.finishFromExecutionError(active, err)
 		return
 	}
 	defer body.Close()
 
-	err = RelayProviderStream(
+	err = relayProviderStream(
 		active.ctx,
 		body,
 		func(event string, payload any) error {
@@ -188,24 +229,35 @@ func (c *Coordinator) execute(active *activeRun) {
 				Text:               values["text"],
 			})
 		},
+		active.touch,
 	)
 	if err != nil {
-		if errors.Is(err, context.Canceled) ||
-			active.ctx.Err() != nil {
-			c.finishCancelled(active)
-			return
-		}
-		c.finishFailure(active, streamFailure(err))
+		c.finishFromExecutionError(active, err)
 		return
 	}
-	c.finishCompleted(active)
+	c.finishSuccess(active)
+}
+
+func (c *Coordinator) finishSuccess(active *activeRun) {
+	status, claimed := active.claimFinish(domain.RunCompleted)
+	if !claimed {
+		return
+	}
+	switch status {
+	case domain.RunCancelled:
+		c.finishCancelled(active)
+	case domain.RunFailed:
+		c.finishFailure(active, providerTimeoutFailure())
+	default:
+		c.finishCompleted(active)
+	}
 }
 
 func (c *Coordinator) finishCompleted(active *activeRun) {
 	execution := active.execution
 	text := active.journal.Snapshot().Text
-	err := c.repository.FinalizeAgentRun(
-		context.Background(),
+	err := c.finalize(
+		active,
 		FinalizeRunRecord{
 			RunID:             execution.Run.ID,
 			Status:            domain.RunCompleted,
@@ -218,16 +270,18 @@ func (c *Coordinator) finishCompleted(active *activeRun) {
 	)
 	if err != nil {
 		c.logFinalizeError(active, err)
+		c.finishInterrupted(active)
 		return
 	}
 	c.appendTerminal(active, domain.RunCompleted, nil)
+	c.scheduleJournalRemoval(active)
 }
 
 func (c *Coordinator) finishCancelled(active *activeRun) {
 	execution := active.execution
 	text := active.journal.Snapshot().Text
-	err := c.repository.FinalizeAgentRun(
-		context.Background(),
+	err := c.finalize(
+		active,
 		FinalizeRunRecord{
 			RunID:             execution.Run.ID,
 			Status:            domain.RunCancelled,
@@ -240,16 +294,18 @@ func (c *Coordinator) finishCancelled(active *activeRun) {
 	)
 	if err != nil {
 		c.logFinalizeError(active, err)
+		c.finishInterrupted(active)
 		return
 	}
 	c.appendTerminal(active, domain.RunCancelled, nil)
+	c.scheduleJournalRemoval(active)
 }
 
 func (c *Coordinator) finishFailure(active *activeRun, agentError domain.Error) {
 	execution := active.execution
 	text := active.journal.Snapshot().Text
-	err := c.repository.FinalizeAgentRun(
-		context.Background(),
+	err := c.finalize(
+		active,
 		FinalizeRunRecord{
 			RunID:             execution.Run.ID,
 			Status:            domain.RunFailed,
@@ -263,9 +319,45 @@ func (c *Coordinator) finishFailure(active *activeRun, agentError domain.Error) 
 	)
 	if err != nil {
 		c.logFinalizeError(active, err)
+		c.finishInterrupted(active)
 		return
 	}
 	c.appendTerminal(active, domain.RunFailed, &agentError)
+	c.scheduleJournalRemoval(active)
+}
+
+func (c *Coordinator) finishInterrupted(active *activeRun) {
+	active.fallbackInterrupted()
+	execution := active.execution
+	agentError := domain.NewError(
+		"AGENT_FINALIZE_FAILED",
+		"server",
+		"Agent 运行终结失败",
+		true,
+	)
+	err := interruptRunWithRetry(
+		c.repository,
+		c.config,
+		InterruptRunRecord{
+			RunID:           execution.Run.ID,
+			AssistantPartID: execution.AssistantPartID,
+			AssistantText:   active.journal.Snapshot().Text,
+			AgentError:      agentError,
+		},
+	)
+	if err != nil {
+		if c.logger != nil {
+			c.logger.Error(
+				"interrupt agent run after finalize failure",
+				"run_id", execution.Run.ID,
+				"error", err,
+			)
+		}
+		c.scheduleJournalRemoval(active)
+		return
+	}
+	c.appendTerminal(active, domain.RunInterrupted, &agentError)
+	c.scheduleJournalRemoval(active)
 }
 
 func (c *Coordinator) appendTerminal(
@@ -324,6 +416,102 @@ func (c *Coordinator) logFinalizeError(active *activeRun, err error) {
 	}
 }
 
+func (c *Coordinator) finalize(
+	active *activeRun,
+	record FinalizeRunRecord,
+) error {
+	return finalizeRunWithRetry(c.repository, c.config, record)
+}
+
+func (c *Coordinator) finishFromExecutionError(
+	active *activeRun,
+	err error,
+) {
+	preferredStatus := domain.RunFailed
+	agentError := streamFailure(err)
+	switch {
+	case active.idleTimedOut.Load() ||
+		errors.Is(active.ctx.Err(), context.DeadlineExceeded):
+		agentError = providerTimeoutFailure()
+	case errors.Is(err, context.Canceled):
+		preferredStatus = domain.RunCancelled
+		agentError = domain.Error{}
+	}
+	status, claimed := active.claimFinish(preferredStatus)
+	if !claimed {
+		return
+	}
+	if status == domain.RunCancelled {
+		c.finishCancelled(active)
+		return
+	}
+	c.finishFailure(active, agentError)
+}
+
+func (c *Coordinator) scheduleJournalRemoval(active *activeRun) {
+	runID := active.execution.Run.ID
+	time.AfterFunc(c.config.TerminalJournalTTL, func() {
+		c.RemoveJournal(runID)
+	})
+}
+
+func (c *Coordinator) stopRun(active *activeRun) {
+	active.idleMu.Lock()
+	if active.idleTimer != nil {
+		active.idleTimer.Stop()
+	}
+	active.idleMu.Unlock()
+	active.cancel()
+}
+
+func (a *activeRun) claimFinish(
+	preferred domain.RunStatus,
+) (domain.RunStatus, bool) {
+	a.terminalMu.Lock()
+	defer a.terminalMu.Unlock()
+	if a.finishClaimed {
+		return a.finishedStatus, false
+	}
+	status := preferred
+	switch {
+	case a.cancelRequested:
+		status = domain.RunCancelled
+	case a.idleTimedOut.Load() ||
+		errors.Is(a.ctx.Err(), context.DeadlineExceeded):
+		status = domain.RunFailed
+	}
+	a.finishClaimed = true
+	a.finishedStatus = status
+	return status, true
+}
+
+func (a *activeRun) fallbackInterrupted() {
+	a.terminalMu.Lock()
+	defer a.terminalMu.Unlock()
+	a.finishedStatus = domain.RunInterrupted
+}
+
+func (a *activeRun) startIdleTimer(timeout time.Duration) {
+	a.idleMu.Lock()
+	defer a.idleMu.Unlock()
+	if a.idleTimer != nil {
+		a.idleTimer.Stop()
+	}
+	a.idleTimeout = timeout
+	a.idleTimer = time.AfterFunc(timeout, func() {
+		a.idleTimedOut.Store(true)
+		a.cancel()
+	})
+}
+
+func (a *activeRun) touch() {
+	a.idleMu.Lock()
+	defer a.idleMu.Unlock()
+	if a.idleTimer != nil {
+		a.idleTimer.Reset(a.idleTimeout)
+	}
+}
+
 func providerFailure(err error) domain.Error {
 	if errors.Is(err, ErrProviderNotConfigured) {
 		return domain.NewError(
@@ -337,6 +525,15 @@ func providerFailure(err error) domain.Error {
 		"AGENT_PROVIDER_FAILED",
 		"server",
 		"模型服务请求失败",
+		true,
+	)
+}
+
+func providerTimeoutFailure() domain.Error {
+	return domain.NewError(
+		"AGENT_PROVIDER_TIMEOUT",
+		"server",
+		"模型服务响应超时",
 		true,
 	)
 }

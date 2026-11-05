@@ -2,6 +2,7 @@ import {
   embeddedAgentError,
   type AgentError,
   type AgentMessageStatus,
+  type AgentMessageSnapshot,
   type AgentRunStatus,
   type AgentSendHandlers,
   type AgentSendResult,
@@ -24,6 +25,7 @@ export type ConsumeAgentRunInput = {
   afterSequence: number;
   signal: AbortSignal;
   materializer: RunMaterializer;
+  recreateMaterializer?: (snapshot: AgentMessageSnapshot) => RunMaterializer;
   handlers: AgentSendHandlers;
   maxRetries?: number;
   retryDelayMs?: number;
@@ -71,17 +73,15 @@ function wait(delayMs: number, signal: AbortSignal) {
   });
 }
 
-function cancelledResult(
-  runId: string,
-  assistantMessageId: string,
-): Result<AgentSendResult> {
+function requestCancelledResult(): Result<AgentSendResult> {
   return [
-    {
-      assistantMessageId,
-      runId,
-      status: "cancelled",
-    },
     null,
+    {
+      code: "REQUEST_CANCELLED",
+      kind: "cancelled",
+      message: "Agent 订阅已取消",
+      retryable: false,
+    },
   ];
 }
 
@@ -106,48 +106,79 @@ function statusFromPersistedMessage(status: AgentMessageStatus): AgentRunStatus 
   }
 }
 
+type PersistedRunRecovery = {
+  result: Result<AgentSendResult>;
+  continueAfter: number | null;
+};
+
 async function recoverPersistedRun(
   input: ConsumeAgentRunInput,
-): Promise<Result<AgentSendResult>> {
-  const detail = await getAgentSession(
-    input.baseUrl,
-    input.sessionId,
-    input.fetchImpl,
-  );
-  const message =
-    detail.messages.find(
-      (candidate) => candidate.id === input.assistantMessageId,
-    ) ??
-    detail.messages.find(
-      (candidate) =>
-        candidate.role === "assistant" &&
-        candidate.activeRunId === input.runId,
+): Promise<PersistedRunRecovery> {
+  let detail;
+  try {
+    detail = await getAgentSession(
+      input.baseUrl,
+      input.sessionId,
+      input.fetchImpl,
     );
+  } catch (cause) {
+    return {
+      result: [null, networkError(cause)],
+      continueAfter: null,
+    };
+  }
+  const message = detail.messages.find(
+    (candidate) =>
+      candidate.id === input.assistantMessageId &&
+      candidate.activeRunId === input.runId,
+  );
   if (!message) {
-    return [
-      null,
-      {
-        code: "AGENT_MESSAGE_NOT_RETRYABLE",
-        kind: "conflict",
-        message: "恢复后的助手消息不存在",
-        retryable: false,
-      },
-    ];
+    return {
+      result: [
+        null,
+        {
+          code: "AGENT_RUN_INTERRUPTED",
+          kind: "not_found",
+          message: "恢复目标已被新的 Run 取代",
+          retryable: false,
+        },
+      ],
+      continueAfter: null,
+    };
   }
   input.handlers.onSnapshot({
     message,
     parts: detail.messageParts.filter(
-      (part) => part.messageId === message.id,
+      (part) =>
+        part.messageId === message.id && part.runId === input.runId,
     ),
   });
-  return [
-    {
-      assistantMessageId: message.id,
-      runId: input.runId,
-      status: statusFromPersistedMessage(message.status),
-    },
-    null,
-  ];
+  if (input.recreateMaterializer) {
+    input.materializer = input.recreateMaterializer({
+      message,
+      parts: detail.messageParts.filter(
+        (part) =>
+          part.messageId === message.id && part.runId === input.runId,
+      ),
+    });
+  }
+  const status = statusFromPersistedMessage(message.status);
+  const activeRun =
+    detail.activeRun?.runId === input.runId ? detail.activeRun : null;
+  return {
+    result: [
+      {
+        assistantMessageId: message.id,
+        runId: input.runId,
+        status,
+      },
+      null,
+    ],
+    continueAfter:
+      status === "running"
+        ? Math.max(input.afterSequence, activeRun?.lastSequence ?? 0)
+        : null,
+  };
 }
 
 export async function consumeAgentRun(
@@ -157,6 +188,7 @@ export async function consumeAgentRun(
   const retryDelayMs = input.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
   let cursor = input.afterSequence;
   let attempt = 0;
+  let recoveryCycles = 0;
 
   while (!input.signal.aborted) {
     try {
@@ -210,15 +242,33 @@ export async function consumeAgentRun(
       }
     } catch (cause) {
       if (input.signal.aborted || isAbortError(cause)) {
-        return cancelledResult(input.runId, input.assistantMessageId);
+        return requestCancelledResult();
       }
       const error = networkError(cause);
-      if (error.code === "AGENT_STREAM_CURSOR_EXPIRED") {
-        try {
-          return await recoverPersistedRun(input);
-        } catch (recoveryCause) {
-          return [null, networkError(recoveryCause)];
+      if (
+        error.code === "AGENT_STREAM_CURSOR_EXPIRED" ||
+        (error.retryable && attempt >= maxRetries)
+      ) {
+        const recovery = await recoverPersistedRun(input);
+        if (recovery.continueAfter !== null) {
+          recoveryCycles += 1;
+          if (recoveryCycles > Math.max(1, maxRetries + 1)) {
+            return [
+              null,
+              {
+                code: "AGENT_RUN_INTERRUPTED",
+                kind: "server",
+                message: "Agent 恢复连接中断",
+                retryable: true,
+              },
+            ];
+          }
+          cursor = recovery.continueAfter;
+          attempt = 0;
+          await wait(retryDelayMs, input.signal);
+          continue;
         }
+        return recovery.result;
       }
       if (!error.retryable || attempt >= maxRetries) {
         return [null, error];
@@ -231,5 +281,5 @@ export async function consumeAgentRun(
     }
   }
 
-  return cancelledResult(input.runId, input.assistantMessageId);
+  return requestCancelledResult();
 }

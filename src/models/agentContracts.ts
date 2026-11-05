@@ -6,7 +6,6 @@ export const agentErrorCodes = [
   "REQUEST_CANCELLED",
   "AGENT_SESSION_NOT_FOUND",
   "AGENT_SESSION_BUSY",
-  "AGENT_IDEMPOTENCY_CONFLICT",
   "AGENT_PERSISTENCE_FAILED",
   "AGENT_REQUEST_ALREADY_PROCESSED",
   "AGENT_REQUEST_ID_CONFLICT",
@@ -186,6 +185,7 @@ export type AgentSendInput = {
 export type AgentRetryInput = {
   sessionId: string;
   assistantMessageId: string;
+  previousRunId?: string;
   clientRequestId: string;
   signal: AbortSignal;
 };

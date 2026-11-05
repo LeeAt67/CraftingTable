@@ -10,6 +10,8 @@ import (
 type Service struct {
 	repository  Repository
 	coordinator *Coordinator
+	logger      *slog.Logger
+	config      RuntimeConfig
 }
 
 func NewService(
@@ -17,9 +19,25 @@ func NewService(
 	provider StreamProvider,
 	logger *slog.Logger,
 ) *Service {
+	return NewServiceWithConfig(
+		repository,
+		provider,
+		logger,
+		DefaultRuntimeConfig(),
+	)
+}
+
+func NewServiceWithConfig(
+	repository Repository,
+	provider StreamProvider,
+	logger *slog.Logger,
+	config RuntimeConfig,
+) *Service {
 	return &Service{
 		repository:  repository,
-		coordinator: NewCoordinator(repository, provider, logger),
+		coordinator: NewCoordinator(repository, provider, logger, config),
+		logger:      logger,
+		config:      normalizedRuntimeConfig(config),
 	}
 }
 
@@ -72,21 +90,11 @@ func (s *Service) SendMessage(
 	if err != nil {
 		return domain.RunHandle{}, err
 	}
+	if execution.Replayed {
+		return domain.RunHandle{}, replayedRunError(execution)
+	}
 	if err := s.coordinator.Start(execution); err != nil {
-		_ = s.repository.FinalizeAgentRun(ctx, FinalizeRunRecord{
-			RunID:           execution.Run.ID,
-			Status:          domain.RunFailed,
-			AssistantPartID: execution.AssistantPartID,
-			MessageStatus:   domain.MessageFailed,
-			PartStatus:      domain.PartFailed,
-			AgentError: &domain.Error{
-				Code:      "AGENT_RUN_START_FAILED",
-				Kind:      "server",
-				Message:   "Agent 执行启动失败",
-				Retryable: true,
-			},
-			TerminalEventType: "run.failed",
-		})
+		s.failStartup(execution)
 		return domain.RunHandle{}, err
 	}
 	return handleFromExecution(execution), nil
@@ -100,21 +108,11 @@ func (s *Service) RetryMessage(
 	if err != nil {
 		return domain.RunHandle{}, err
 	}
+	if execution.Replayed {
+		return domain.RunHandle{}, replayedRunError(execution)
+	}
 	if err := s.coordinator.Start(execution); err != nil {
-		_ = s.repository.FinalizeAgentRun(ctx, FinalizeRunRecord{
-			RunID:           execution.Run.ID,
-			Status:          domain.RunFailed,
-			AssistantPartID: execution.AssistantPartID,
-			MessageStatus:   domain.MessageFailed,
-			PartStatus:      domain.PartFailed,
-			AgentError: &domain.Error{
-				Code:      "AGENT_RUN_START_FAILED",
-				Kind:      "server",
-				Message:   "Agent 执行启动失败",
-				Retryable: true,
-			},
-			TerminalEventType: "run.failed",
-		})
+		s.failStartup(execution)
 		return domain.RunHandle{}, err
 	}
 	return handleFromExecution(execution), nil
@@ -135,9 +133,11 @@ func (s *Service) CancelRun(
 	if run.Status != domain.RunRunning {
 		return run, nil
 	}
-	if err := s.coordinator.Cancel(runID); err != nil {
+	status, err := s.coordinator.Cancel(ctx, runID)
+	if err != nil {
 		return domain.Run{}, err
 	}
+	run.Status = status
 	return run, nil
 }
 
@@ -172,4 +172,57 @@ func handleFromExecution(execution domain.RunExecution) domain.RunHandle {
 		AssistantPartID:    execution.AssistantPartID,
 		Status:             execution.Run.Status,
 	}
+}
+
+func replayedRunError(execution domain.RunExecution) error {
+	code := ErrRequestAlreadyProcessed
+	if execution.Run.Status == domain.RunRunning {
+		code = ErrSessionBusy
+	}
+	return &RunStateError{
+		Err:    code,
+		RunID:  execution.Run.ID,
+		Status: execution.Run.Status,
+	}
+}
+
+func (s *Service) failStartup(execution domain.RunExecution) {
+	agentError := domain.Error{
+		Code:      "AGENT_RUN_START_FAILED",
+		Kind:      "server",
+		Message:   "Agent 执行启动失败",
+		Retryable: true,
+	}
+	err := finalizeRunWithRetry(
+		s.repository,
+		s.config,
+		FinalizeRunRecord{
+			RunID:             execution.Run.ID,
+			Status:            domain.RunFailed,
+			AssistantPartID:   execution.AssistantPartID,
+			MessageStatus:     domain.MessageFailed,
+			PartStatus:        domain.PartFailed,
+			AgentError:        &agentError,
+			TerminalEventType: "run.failed",
+		},
+	)
+	if err == nil {
+		return
+	}
+	if s.logger != nil {
+		s.logger.Error(
+			"finalize agent run after startup failure",
+			"run_id", execution.Run.ID,
+			"error", err,
+		)
+	}
+	_ = interruptRunWithRetry(
+		s.repository,
+		s.config,
+		InterruptRunRecord{
+			RunID:           execution.Run.ID,
+			AssistantPartID: execution.AssistantPartID,
+			AgentError:      agentError,
+		},
+	)
 }

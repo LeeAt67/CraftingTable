@@ -200,6 +200,7 @@ export function createAgentEffect(
     const abortController = providedAbortController ?? new AbortController();
     let assistantMessageId: string | null = null;
     let runId: string | null = null;
+    let releaseLiveRun = false;
 
     try {
       const result = await request(abortController.signal, {
@@ -225,14 +226,27 @@ export function createAgentEffect(
       });
       const [sent, error] = result;
       if (error) {
-        if (isAbortError(error.cause)) {
+        if (error.code === "REQUEST_CANCELLED" || isAbortError(error.cause)) {
+          releaseLiveRun = true;
           useAgentStore.getState().setSendPhase("idle");
           return result;
         }
+        const currentAssistant = assistantMessageId
+          ? useAgentStore
+              .getState()
+              .messagesBySessionId[sessionId]?.find(
+                (message) => message.id === assistantMessageId,
+              )
+          : undefined;
+        releaseLiveRun = Boolean(
+          currentAssistant && currentAssistant.status !== "streaming",
+        );
         reportFailure(error);
         return result;
       }
 
+      const terminal = sent.status !== "running";
+      releaseLiveRun = terminal;
       if (assistantMessageId) {
         const assistant = useAgentStore
           .getState()
@@ -251,7 +265,9 @@ export function createAgentEffect(
       if (detail) {
         useAgentStore.getState().upsertSession(detail.session);
       }
-      useAgentStore.getState().setSendPhase("idle");
+      useAgentStore
+        .getState()
+        .setSendPhase(terminal ? "idle" : "streaming");
       if (sent.status === "cancelled") {
         notifier.success("已停止生成");
       }
@@ -269,6 +285,7 @@ export function createAgentEffect(
       }
       const liveRun = useAgentStore.getState().liveRun;
       if (
+        releaseLiveRun &&
         liveRun?.sessionId === sessionId &&
         (!runId || liveRun.runId === runId)
       ) {
@@ -458,6 +475,7 @@ export function createAgentEffect(
           {
             sessionId,
             assistantMessageId: target.id,
+            previousRunId: target.activeRunId,
             clientRequestId: createId(),
             signal,
           },
@@ -489,16 +507,14 @@ export function createAgentEffect(
     try {
       const result = await model.cancelRun(liveRun);
       const [, error] = result;
-      abortControllers.get(liveRun.runId)?.abort();
       if (error) {
-        reportFailure(error);
+        useAgentStore.getState().setError(error);
         return result;
       }
       return result;
     } catch (cause) {
-      abortControllers.get(liveRun.runId)?.abort();
       const error = internalError("停止生成失败", cause);
-      reportFailure(error);
+      useAgentStore.getState().setError(error);
       return [null, error] as const;
     }
   };

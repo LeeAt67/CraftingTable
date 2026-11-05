@@ -4,8 +4,10 @@ package store
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -70,6 +72,15 @@ func OpenSQLite(ctx context.Context, filename string) (*SQLiteStore, error) {
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+		  name TEXT PRIMARY KEY,
+		  checksum TEXT NOT NULL,
+		  applied_at TEXT NOT NULL
+		)
+	`); err != nil {
+		return fmt.Errorf("create schema migrations table: %w", err)
+	}
 	entries, err := fs.ReadDir(migrationFiles, "migrations")
 	if err != nil {
 		return fmt.Errorf("list migrations: %w", err)
@@ -85,9 +96,63 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", entry.Name(), err)
 		}
-		if _, err := db.ExecContext(ctx, string(body)); err != nil {
-			return fmt.Errorf("apply migration %s: %w", entry.Name(), err)
+		sum := sha256.Sum256(body)
+		checksum := hex.EncodeToString(sum[:])
+		var appliedChecksum string
+		err = db.QueryRowContext(
+			ctx,
+			`SELECT checksum FROM schema_migrations WHERE name = ?`,
+			entry.Name(),
+		).Scan(&appliedChecksum)
+		if err == nil {
+			if appliedChecksum != checksum {
+				return fmt.Errorf(
+					"migration %s checksum mismatch: applied %s, embedded %s",
+					entry.Name(),
+					appliedChecksum,
+					checksum,
+				)
+			}
+			continue
 		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("read migration %s ledger: %w", entry.Name(), err)
+		}
+		if err := applyMigration(ctx, db, entry.Name(), string(body), checksum); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func applyMigration(
+	ctx context.Context,
+	db *sql.DB,
+	name string,
+	body string,
+	checksum string,
+) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin migration %s: %w", name, err)
+	}
+	if _, err := tx.ExecContext(ctx, body); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("apply migration %s: %w", name, err)
+	}
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO schema_migrations (name, checksum, applied_at)
+		 VALUES (?, ?, ?)`,
+		name,
+		checksum,
+		time.Now().UTC().Format(time.RFC3339Nano),
+	); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("record migration %s: %w", name, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit migration %s: %w", name, err)
 	}
 	return nil
 }

@@ -2,10 +2,13 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -25,6 +28,7 @@ type CreateAgentSendRunInput = core.CreateSendRunRecord
 type CreateAgentRetryRunInput = core.CreateRetryRunRecord
 
 type FinalizeAgentRunInput = core.FinalizeRunRecord
+type InterruptAgentRunInput = core.InterruptRunRecord
 
 func (s *SQLiteStore) withTx(
 	ctx context.Context,
@@ -65,7 +69,7 @@ func (s *SQLiteStore) CreateAgentSession(
 		}
 		if found {
 			if sessionID == "" {
-				return core.ErrIdempotencyConflict
+				return requestIDConflict(input.ClientRequestID)
 			}
 			session, err = getSessionRecord(ctx, tx, sessionID)
 			reusedRunID = runID
@@ -147,20 +151,29 @@ func (s *SQLiteStore) GetAgentSession(
 	ctx context.Context,
 	sessionID string,
 ) (domain.SessionDetail, error) {
-	session, err := getSessionRecord(ctx, s.db, sessionID)
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return domain.SessionDetail{}, fmt.Errorf(
+			"begin agent session read transaction: %w",
+			err,
+		)
+	}
+	defer tx.Rollback()
+
+	session, err := getSessionRecord(ctx, tx, sessionID)
 	if err != nil {
 		return domain.SessionDetail{}, err
 	}
 
-	messages, err := listMessages(ctx, s.db, sessionID)
+	messages, err := listMessages(ctx, tx, sessionID)
 	if err != nil {
 		return domain.SessionDetail{}, err
 	}
-	parts, err := listVisibleParts(ctx, s.db, sessionID)
+	parts, err := listVisibleParts(ctx, tx, sessionID)
 	if err != nil {
 		return domain.SessionDetail{}, err
 	}
-	activeRun, err := getActiveRun(ctx, s.db, sessionID)
+	activeRun, err := getActiveRun(ctx, tx, sessionID)
 	if err != nil {
 		return domain.SessionDetail{}, err
 	}
@@ -177,7 +190,10 @@ func (s *SQLiteStore) CreateAgentSendRun(
 	ctx context.Context,
 	input core.CreateSendRunRecord,
 ) (domain.RunExecution, error) {
-	var runID string
+	var (
+		runID    string
+		replayed bool
+	)
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
 		existingSessionID, existingRunID, found, err := lookupIdempotency(
 			ctx,
@@ -191,9 +207,10 @@ func (s *SQLiteStore) CreateAgentSendRun(
 		}
 		if found {
 			if existingSessionID != input.SessionID || existingRunID == "" {
-				return core.ErrIdempotencyConflict
+				return requestIDConflict(input.ClientRequestID)
 			}
 			runID = existingRunID
+			replayed = true
 			return nil
 		}
 
@@ -353,14 +370,22 @@ func (s *SQLiteStore) CreateAgentSendRun(
 	if err != nil {
 		return domain.RunExecution{}, err
 	}
-	return s.getRunExecution(ctx, runID)
+	execution, err := s.getRunExecution(ctx, runID)
+	if err != nil {
+		return domain.RunExecution{}, err
+	}
+	execution.Replayed = replayed
+	return execution, nil
 }
 
 func (s *SQLiteStore) CreateAgentRetryRun(
 	ctx context.Context,
 	input core.CreateRetryRunRecord,
 ) (domain.RunExecution, error) {
-	var runID string
+	var (
+		runID    string
+		replayed bool
+	)
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
 		existingSessionID, existingRunID, found, err := lookupIdempotency(
 			ctx,
@@ -374,9 +399,10 @@ func (s *SQLiteStore) CreateAgentRetryRun(
 		}
 		if found {
 			if existingSessionID != input.SessionID || existingRunID == "" {
-				return core.ErrIdempotencyConflict
+				return requestIDConflict(input.ClientRequestID)
 			}
 			runID = existingRunID
+			replayed = true
 			return nil
 		}
 
@@ -500,7 +526,12 @@ func (s *SQLiteStore) CreateAgentRetryRun(
 	if err != nil {
 		return domain.RunExecution{}, err
 	}
-	return s.getRunExecution(ctx, runID)
+	execution, err := s.getRunExecution(ctx, runID)
+	if err != nil {
+		return domain.RunExecution{}, err
+	}
+	execution.Replayed = replayed
+	return execution, nil
 }
 
 func (s *SQLiteStore) FinalizeAgentRun(
@@ -624,11 +655,43 @@ func (s *SQLiteStore) FinalizeAgentRun(
 		if terminalEventType == "" {
 			terminalEventType = terminalEventForStatus(input.Status)
 		}
+		textHash := sha256.Sum256([]byte(input.AssistantText))
+		finishedPayload := map[string]any{
+			"status":     input.PartStatus,
+			"textLength": utf8.RuneCountInString(input.AssistantText),
+			"textSha256": hex.EncodeToString(textHash[:]),
+		}
 		if err := appendRunEventAt(
 			ctx,
 			tx,
 			input.RunID,
 			nextSequence,
+			"message.part.finished",
+			finishedPayload,
+			now,
+		); err != nil {
+			return err
+		}
+		stepPayload := map[string]any{"status": input.Status}
+		if input.AgentError != nil {
+			stepPayload["errorCode"] = input.AgentError.Code
+		}
+		if err := appendRunEventAt(
+			ctx,
+			tx,
+			input.RunID,
+			nextSequence+1,
+			"step.finished",
+			stepPayload,
+			now,
+		); err != nil {
+			return err
+		}
+		if err := appendRunEventAt(
+			ctx,
+			tx,
+			input.RunID,
+			nextSequence+2,
 			terminalEventType,
 			map[string]any{
 				"runId":  input.RunID,
@@ -642,11 +705,178 @@ func (s *SQLiteStore) FinalizeAgentRun(
 	})
 }
 
+func (s *SQLiteStore) InterruptAgentRun(
+	ctx context.Context,
+	input core.InterruptRunRecord,
+) error {
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		var (
+			sessionID          string
+			assistantMessageID string
+			status             domain.RunStatus
+			nextSequence       int
+		)
+		err := tx.QueryRowContext(
+			ctx,
+			`SELECT session_id, assistant_message_id, status, next_event_sequence
+			 FROM agent_runs WHERE id = ?`,
+			input.RunID,
+		).Scan(&sessionID, &assistantMessageID, &status, &nextSequence)
+		if errors.Is(err, sql.ErrNoRows) {
+			return core.ErrRunNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("load run for interruption: %w", err)
+		}
+		if status != domain.RunRunning {
+			return nil
+		}
+
+		now := timestamp()
+		errorJSON, err := encodeAgentError(&input.AgentError)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE agent_message_parts
+			 SET text_content = ?, status = 'interrupted', error_json = ?,
+			     updated_at = ?
+			 WHERE id = ? AND run_id = ?`,
+			input.AssistantText,
+			errorJSON,
+			now,
+			input.AssistantPartID,
+			input.RunID,
+		); err != nil {
+			return fmt.Errorf("interrupt assistant part: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE agent_messages SET status = 'interrupted', updated_at = ?
+			 WHERE id = ?`,
+			now,
+			assistantMessageID,
+		); err != nil {
+			return fmt.Errorf("interrupt assistant message: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE agent_runs
+			 SET status = 'interrupted', error_json = ?, finished_at = ?,
+			     updated_at = ?
+			 WHERE id = ?`,
+			errorJSON,
+			now,
+			now,
+			input.RunID,
+		); err != nil {
+			return fmt.Errorf("interrupt agent run: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE agent_steps
+			 SET status = 'interrupted', finished_at = ?
+			 WHERE run_id = ? AND status = 'running'`,
+			now,
+			input.RunID,
+		); err != nil {
+			return fmt.Errorf("interrupt agent step: %w", err)
+		}
+
+		textHash := sha256.Sum256([]byte(input.AssistantText))
+		for offset, event := range []struct {
+			eventType string
+			payload   map[string]any
+		}{
+			{
+				eventType: "message.part.finished",
+				payload: map[string]any{
+					"status":     domain.PartInterrupted,
+					"textLength": utf8.RuneCountInString(input.AssistantText),
+					"textSha256": hex.EncodeToString(textHash[:]),
+				},
+			},
+			{
+				eventType: "step.finished",
+				payload: map[string]any{
+					"status":    domain.RunInterrupted,
+					"errorCode": input.AgentError.Code,
+				},
+			},
+			{
+				eventType: "run.interrupted",
+				payload: map[string]any{
+					"runId":  input.RunID,
+					"status": domain.RunInterrupted,
+				},
+			},
+		} {
+			if err := appendRunEventAt(
+				ctx,
+				tx,
+				input.RunID,
+				nextSequence+offset,
+				event.eventType,
+				event.payload,
+				now,
+			); err != nil {
+				return err
+			}
+		}
+		return touchSession(ctx, tx, sessionID, "", now)
+	})
+}
+
 func (s *SQLiteStore) GetAgentRun(
 	ctx context.Context,
 	runID string,
 ) (domain.Run, error) {
 	return getRunRecord(ctx, s.db, runID)
+}
+
+func (s *SQLiteStore) ListAgentRunEvents(
+	ctx context.Context,
+	runID string,
+) ([]domain.RunEvent, error) {
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT sequence, event_type, payload_json
+		 FROM agent_run_events
+		 WHERE run_id = ?
+		 ORDER BY sequence`,
+		runID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list agent run events: %w", err)
+	}
+	defer rows.Close()
+
+	events := make([]domain.RunEvent, 0)
+	for rows.Next() {
+		var (
+			event       domain.RunEvent
+			payloadJSON string
+		)
+		if err := rows.Scan(
+			&event.Sequence,
+			&event.Type,
+			&payloadJSON,
+		); err != nil {
+			return nil, fmt.Errorf("scan agent run event: %w", err)
+		}
+		if err := json.Unmarshal(
+			[]byte(payloadJSON),
+			&event.Payload,
+		); err != nil {
+			return nil, fmt.Errorf("decode agent run event: %w", err)
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate agent run events: %w", err)
+	}
+	return events, nil
 }
 
 func (s *SQLiteStore) RecoverInterruptedAgentRuns(
@@ -742,11 +972,51 @@ func (s *SQLiteStore) RecoverInterruptedAgentRuns(
 			); err != nil {
 				return fmt.Errorf("interrupt agent step: %w", err)
 			}
+			var assistantText string
+			if err := tx.QueryRowContext(
+				ctx,
+				`SELECT text_content
+				 FROM agent_message_parts
+				 WHERE run_id = ? AND type = 'text' AND part_index = 0`,
+				run.id,
+			).Scan(&assistantText); err != nil {
+				return fmt.Errorf("load interrupted assistant text: %w", err)
+			}
+			textHash := sha256.Sum256([]byte(assistantText))
 			if err := appendRunEventAt(
 				ctx,
 				tx,
 				run.id,
 				run.nextSequence,
+				"message.part.finished",
+				map[string]any{
+					"status":     domain.PartInterrupted,
+					"textLength": utf8.RuneCountInString(assistantText),
+					"textSha256": hex.EncodeToString(textHash[:]),
+				},
+				now,
+			); err != nil {
+				return err
+			}
+			if err := appendRunEventAt(
+				ctx,
+				tx,
+				run.id,
+				run.nextSequence+1,
+				"step.finished",
+				map[string]any{
+					"status":    domain.RunInterrupted,
+					"errorCode": runError.Code,
+				},
+				now,
+			); err != nil {
+				return err
+			}
+			if err := appendRunEventAt(
+				ctx,
+				tx,
+				run.id,
+				run.nextSequence+2,
 				"run.interrupted",
 				map[string]any{
 					"runId":  run.id,
@@ -792,7 +1062,11 @@ func (s *SQLiteStore) getRunExecution(
 	return domain.RunExecution{
 		Run:             run,
 		AssistantPartID: assistantPartID,
-		Messages:        contextMessages(detail.Messages, detail.MessageParts),
+		Messages: contextMessages(
+			run,
+			detail.Messages,
+			detail.MessageParts,
+		),
 	}, nil
 }
 
@@ -964,14 +1238,12 @@ func getActiveRun(
 	sessionID string,
 ) (*domain.ActiveRun, error) {
 	var (
-		active  domain.ActiveRun
-		status  string
-		nextSeq int
+		active domain.ActiveRun
+		status string
 	)
 	err := queryer.QueryRowContext(
 		ctx,
-		`SELECT id, user_message_id, assistant_message_id, status,
-		        next_event_sequence
+		`SELECT id, user_message_id, assistant_message_id, status
 		 FROM agent_runs
 		 WHERE session_id = ? AND status = 'running'`,
 		sessionID,
@@ -980,7 +1252,6 @@ func getActiveRun(
 		&active.UserMessageID,
 		&active.AssistantMessageID,
 		&status,
-		&nextSeq,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -989,7 +1260,9 @@ func getActiveRun(
 		return nil, fmt.Errorf("load active agent run: %w", err)
 	}
 	active.Status = domain.RunStatus(status)
-	active.LastSequence = nextSeq - 1
+	// Durable RunEvent sequences and live SSE cursors are independent.
+	// The service overlays the journal cursor when this process owns the Run.
+	active.LastSequence = 0
 	return &active, nil
 }
 
@@ -1117,9 +1390,13 @@ func lookupIdempotency(
 		return "", "", false, fmt.Errorf("load agent idempotency key: %w", err)
 	}
 	if storedHash != requestHash {
-		return "", "", false, core.ErrIdempotencyConflict
+		return "", "", false, requestIDConflict(clientRequestID)
 	}
 	return sessionID.String, runID.String, true, nil
+}
+
+func requestIDConflict(clientRequestID string) error {
+	return &core.RequestIDConflictError{ClientRequestID: clientRequestID}
 }
 
 func insertIdempotency(
@@ -1282,7 +1559,7 @@ func touchSession(
 }
 
 func truncateTitle(value string) string {
-	const limit = 40
+	const limit = 32
 	if utf8.RuneCountInString(value) <= limit {
 		return value
 	}
@@ -1361,25 +1638,108 @@ func encodeAgentError(agentError *domain.Error) (any, error) {
 }
 
 func contextMessages(
+	currentRun domain.Run,
 	messages []domain.Message,
 	parts []domain.MessagePart,
 ) []domain.ContextMessage {
-	result := make([]domain.ContextMessage, 0, len(messages))
+	const (
+		maxMessages = 40
+		maxRunes    = 20_000
+	)
+	messageByID := make(map[string]domain.Message, len(messages))
+	partsByMessageID := make(map[string][]domain.MessagePart, len(messages))
 	for _, message := range messages {
+		messageByID[message.ID] = message
+	}
+	for _, part := range parts {
+		partsByMessageID[part.MessageID] = append(
+			partsByMessageID[part.MessageID],
+			part,
+		)
+	}
+	textFor := func(messageID string) string {
+		messageParts := partsByMessageID[messageID]
+		sort.SliceStable(messageParts, func(i, j int) bool {
+			return messageParts[i].Index < messageParts[j].Index
+		})
 		var text strings.Builder
-		for _, part := range parts {
-			if part.MessageID == message.ID && part.Type == domain.PartText {
+		for _, part := range messageParts {
+			if part.Type == domain.PartText {
 				text.WriteString(part.Text)
 			}
 		}
-		if text.Len() > 0 {
+		return text.String()
+	}
+
+	type completeTurn struct {
+		user      domain.ContextMessage
+		assistant domain.ContextMessage
+		runes     int
+	}
+	completeTurns := make([]completeTurn, 0)
+	for _, assistant := range messages {
+		if assistant.Role != domain.MessageAssistant ||
+			assistant.Status != domain.MessageComplete ||
+			assistant.UserMessageID == nil {
+			continue
+		}
+		user, found := messageByID[*assistant.UserMessageID]
+		if !found ||
+			user.Role != domain.MessageUser ||
+			user.Status != domain.MessageComplete {
+			continue
+		}
+		userText := textFor(user.ID)
+		assistantText := textFor(assistant.ID)
+		if strings.TrimSpace(userText) == "" ||
+			strings.TrimSpace(assistantText) == "" {
+			continue
+		}
+		completeTurns = append(completeTurns, completeTurn{
+			user: domain.ContextMessage{
+				Role:    string(domain.MessageUser),
+				Content: userText,
+			},
+			assistant: domain.ContextMessage{
+				Role:    string(domain.MessageAssistant),
+				Content: assistantText,
+			},
+			runes: utf8.RuneCountInString(userText) +
+				utf8.RuneCountInString(assistantText),
+		})
+	}
+
+	currentUser, found := messageByID[currentRun.UserMessageID]
+	result := make([]domain.ContextMessage, 0, maxMessages)
+	totalRunes := 0
+	if found {
+		currentText := textFor(currentUser.ID)
+		if strings.TrimSpace(currentText) != "" {
 			result = append(result, domain.ContextMessage{
-				Role:    string(message.Role),
-				Content: text.String(),
+				Role:    string(domain.MessageUser),
+				Content: currentText,
 			})
+			totalRunes = utf8.RuneCountInString(currentText)
 		}
 	}
-	return result
+
+	selected := make([]completeTurn, 0, len(completeTurns))
+	for index := len(completeTurns) - 1; index >= 0; index-- {
+		turn := completeTurns[index]
+		if len(result)+len(selected)*2+2 > maxMessages {
+			break
+		}
+		if totalRunes+turn.runes > maxRunes {
+			break
+		}
+		selected = append(selected, turn)
+		totalRunes += turn.runes
+	}
+	prefix := make([]domain.ContextMessage, 0, len(selected)*2)
+	for index := len(selected) - 1; index >= 0; index-- {
+		prefix = append(prefix, selected[index].user, selected[index].assistant)
+	}
+	return append(prefix, result...)
 }
 
 func nullableString(value string) any {

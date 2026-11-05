@@ -441,4 +441,262 @@ describe("ApiAgentModel", () => {
     });
     expect(started).not.toHaveBeenCalled();
   });
+
+  it("recovers a created run when the send response is lost", async () => {
+    const requestedUrls: string[] = [];
+    const model = createApiAgentModel({
+      baseUrl: "/api/v1",
+      fetchImpl: async (input) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url.endsWith("/agent/message/send")) {
+          throw new TypeError("response lost");
+        }
+        if (url.includes("/agent/session/get")) {
+          return jsonResponse({
+            session: {
+              id: "session-1",
+              title: "恢复的会话",
+              createdAt: "2026-11-05T00:00:00Z",
+              updatedAt: "2026-11-05T00:00:02Z",
+            },
+            messages: [
+              {
+                id: "user-1",
+                sessionId: "session-1",
+                seq: 1,
+                role: "user",
+                status: "complete",
+                createdAt: "2026-11-05T00:00:00Z",
+                updatedAt: "2026-11-05T00:00:00Z",
+              },
+              {
+                id: "assistant-1",
+                sessionId: "session-1",
+                seq: 2,
+                role: "assistant",
+                status: "streaming",
+                activeRunId: "run-1",
+                userMessageId: "user-1",
+                createdAt: "2026-11-05T00:00:01Z",
+                updatedAt: "2026-11-05T00:00:02Z",
+              },
+            ],
+            messageParts: [
+              {
+                id: "part-1",
+                messageId: "assistant-1",
+                runId: "run-1",
+                index: 0,
+                type: "text",
+                status: "streaming",
+                content: { type: "text", text: "已开始" },
+                createdAt: "2026-11-05T00:00:01Z",
+                updatedAt: "2026-11-05T00:00:02Z",
+              },
+            ],
+            activeRun: {
+              runId: "run-1",
+              status: "running",
+              lastSequence: 2,
+            },
+            nextMessageCursor: null,
+          });
+        }
+        return streamResponse([
+          startFrame({ cursor: 2 }),
+          textFrame(3, "并恢复"),
+          finishFrame(4),
+          doneFrame,
+        ]);
+      },
+    });
+    const started = vi.fn();
+    const snapshots: string[] = [];
+
+    const [result, error] = await model.sendMessage(
+      {
+        sessionId: "session-1",
+        clientRequestId: "send-recovered",
+        message: {
+          id: "user-1",
+          role: "user",
+          parts: [{ type: "text", text: "你好" }],
+        },
+        signal: new AbortController().signal,
+      },
+      {
+        onStarted: started,
+        onSnapshot: (snapshot) => {
+          const textPart = snapshot.parts.find((part) => part.type === "text");
+          if (textPart?.type === "text") {
+            snapshots.push(textPart.content.text);
+          }
+        },
+      },
+    );
+
+    expect(error).toBeNull();
+    expect(result?.status).toBe("completed");
+    expect(started).toHaveBeenCalledWith({
+      assistantMessageId: "assistant-1",
+      runId: "run-1",
+      status: "running",
+    });
+    expect(snapshots.at(0)).toBe("已开始");
+    expect(snapshots.at(-1)).toBe("已开始并恢复");
+    expect(requestedUrls).toEqual([
+      "/api/v1/agent/message/send",
+      "/api/v1/agent/session/get?sessionId=session-1",
+      "/api/v1/agent/run/stream?runId=run-1&after=2",
+    ]);
+  });
+
+  it("does not resume a stale run id from the current retry attempt", async () => {
+    const requestedUrls: string[] = [];
+    const snapshots: string[] = [];
+    const model = createApiAgentModel({
+      baseUrl: "/api/v1",
+      fetchImpl: async (input) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url.includes("/agent/run/stream")) {
+          throw new Error("stale run must not subscribe");
+        }
+        return jsonResponse({
+          session: {
+            id: "session-1",
+            title: "重试后的会话",
+            createdAt: "2026-11-05T00:00:00Z",
+            updatedAt: "2026-11-05T00:00:03Z",
+          },
+          messages: [
+            {
+              id: "assistant-1",
+              sessionId: "session-1",
+              seq: 2,
+              role: "assistant",
+              status: "streaming",
+              activeRunId: "run-2",
+              userMessageId: "user-1",
+              createdAt: "2026-11-05T00:00:01Z",
+              updatedAt: "2026-11-05T00:00:03Z",
+            },
+          ],
+          messageParts: [
+            {
+              id: "part-2",
+              messageId: "assistant-1",
+              runId: "run-2",
+              index: 0,
+              type: "text",
+              status: "streaming",
+              content: { type: "text", text: "新 Run" },
+              createdAt: "2026-11-05T00:00:02Z",
+              updatedAt: "2026-11-05T00:00:03Z",
+            },
+          ],
+          activeRun: {
+            runId: "run-2",
+            assistantMessageId: "assistant-1",
+            status: "running",
+            lastSequence: 3,
+          },
+          nextMessageCursor: null,
+        });
+      },
+    });
+
+    const [result, error] = await model.resumeRun(
+      {
+        sessionId: "session-1",
+        runId: "run-1",
+        afterSequence: 2,
+        signal: new AbortController().signal,
+      },
+      {
+        onStarted: () => undefined,
+        onSnapshot: (snapshot) => {
+          const textPart = snapshot.parts.find((part) => part.type === "text");
+          if (textPart?.type === "text") {
+            snapshots.push(textPart.content.text);
+          }
+        },
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(error?.code).toBe("AGENT_RUN_NOT_FOUND");
+    expect(snapshots).toEqual([]);
+    expect(requestedUrls).toEqual([
+      "/api/v1/agent/session/get?sessionId=session-1",
+    ]);
+  });
+
+  it("does not recover an unrelated active run when a send response is lost", async () => {
+    const requestedUrls: string[] = [];
+    const model = createApiAgentModel({
+      baseUrl: "/api/v1",
+      fetchImpl: async (input) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url.endsWith("/agent/message/send")) {
+          throw new TypeError("response lost");
+        }
+        if (url.includes("/agent/session/get")) {
+          return jsonResponse({
+            session: {
+              id: "session-1",
+              title: "另一个运行",
+              createdAt: "2026-11-05T00:00:00Z",
+              updatedAt: "2026-11-05T00:00:03Z",
+            },
+            messages: [
+              {
+                id: "assistant-other",
+                sessionId: "session-1",
+                seq: 2,
+                role: "assistant",
+                status: "streaming",
+                activeRunId: "run-other",
+                userMessageId: "user-other",
+                createdAt: "2026-11-05T00:00:01Z",
+                updatedAt: "2026-11-05T00:00:03Z",
+              },
+            ],
+            messageParts: [],
+            activeRun: {
+              runId: "run-other",
+              assistantMessageId: "assistant-other",
+              status: "running",
+              lastSequence: 2,
+            },
+            nextMessageCursor: null,
+          });
+        }
+        throw new Error("unrelated run must not subscribe");
+      },
+    });
+
+    const [result, error] = await model.sendMessage(
+      {
+        sessionId: "session-1",
+        clientRequestId: "send-lost",
+        message: {
+          id: "user-requested",
+          role: "user",
+          parts: [{ type: "text", text: "新消息" }],
+        },
+        signal: new AbortController().signal,
+      },
+      { onStarted: () => undefined, onSnapshot: () => undefined },
+    );
+
+    expect(result).toBeNull();
+    expect(error?.code).toBe("AGENT_RUN_START_FAILED");
+    expect(requestedUrls).toEqual([
+      "/api/v1/agent/message/send",
+      "/api/v1/agent/session/get?sessionId=session-1",
+    ]);
+  });
 });

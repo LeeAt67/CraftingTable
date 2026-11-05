@@ -94,7 +94,7 @@ CraftingTable Agent 是工作台中的个人助手，不是独立聊天产品的
 - `AgentStep` 可以扩展为工具、Skill、MCP 和子 Agent 步骤。
 - `RunEvent` 可以增加事件类型，但已有字段不能改变含义。
 - Runtime 可以替换模型供应商，不改变前端协议。
-- 执行状态可以增加 queued、resuming 等状态，不改变已有状态含义。
+- 执行状态不得提前暴露未实现的 `queued`、`resuming` 等业务值；新增状态必须同时完成迁移、兼容和恢复语义设计，不能只扩展枚举。
 - 评测功能可以复用 Run、Step、Event 和 Artifact，但评测平台独立部署。
 
 ### 3.4 架构演进边界
@@ -1605,3 +1605,18 @@ tests/e2e/desktop/agentCrashRecovery.desktop.ts
 - 产品行为、API、契约和桌面验收测试位于 `tests/e2e`；Go package 白盒测试不替代这些场景。
 - 390px、768px、1024px 和 1440px 的 Light / Dark 均通过验证。
 - 真实 Electron 进程完成启动、离线恢复和一条 Fake Runtime 会话。
+
+## 21. 当前实施记录
+
+截至 2026-11-05，单 Agent 的本地持久化、刷新恢复和同步恢复边界已经实现：
+
+- SQLite 保存 Session、Message、Part、Run、Step、durable RunEvent 和幂等键。
+- 单进程 Run Coordinator 使用独立 Context 执行 Provider 请求，浏览器断线不取消 Run。
+- Session 详情在同一只读事务中读取；`activeRun` 与消息片段不会混合运行中和终态快照。
+- SSE 使用内存 Event Journal 的单调 `id` 作为游标，不回退到 durable RunEvent 序号。
+- 前端从 `activeRun.lastSequence` 恢复订阅，并强制校验恢复目标 `runId`。
+- 完成、取消和超时在同一个终态裁决点收敛；Finalize 失败回退为 `interrupted`。
+- 进程重启只把遗留 `running` Run 标记为 `interrupted`；原 Provider 流不会恢复，也不会生成不存在的 token。
+- 前端 Zustand 仍是 Agent 业务状态唯一事实源；AI SDK Hook、React Query 和组件 state 不复制会话事实。
+
+当前明确不包含：多实例执行、跨进程 Run 接管、Redis、工具、Skills、MCP 和多 Agent 编排。这些能力继续遵守本文与工程规范的决策门。

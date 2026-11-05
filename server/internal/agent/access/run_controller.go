@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/leeat/craftingtable/server/internal/agent/core"
 	"github.com/leeat/craftingtable/server/internal/agent/domain"
@@ -13,15 +14,39 @@ import (
 )
 
 type RunController struct {
-	service *core.Service
-	logger  *slog.Logger
+	service           *core.Service
+	logger            *slog.Logger
+	heartbeatInterval time.Duration
+}
+
+type RunControllerOptions struct {
+	HeartbeatInterval time.Duration
 }
 
 func NewRunController(
 	service *core.Service,
 	logger *slog.Logger,
 ) *RunController {
-	return &RunController{service: service, logger: logger}
+	return NewRunControllerWithOptions(
+		service,
+		logger,
+		RunControllerOptions{},
+	)
+}
+
+func NewRunControllerWithOptions(
+	service *core.Service,
+	logger *slog.Logger,
+	options RunControllerOptions,
+) *RunController {
+	if options.HeartbeatInterval <= 0 {
+		options.HeartbeatInterval = 15 * time.Second
+	}
+	return &RunController{
+		service:           service,
+		logger:            logger,
+		heartbeatInterval: options.HeartbeatInterval,
+	}
 }
 
 func (c *RunController) Register(router *httpapi.Router) {
@@ -51,7 +76,8 @@ func (c *RunController) stream(w http.ResponseWriter, r *http.Request) {
 	}
 	events, unsubscribe, err := c.service.SubscribeRun(runID, after)
 	if err != nil {
-		if errors.Is(err, core.ErrJournalCursorExpired) {
+		if errors.Is(err, core.ErrJournalCursorExpired) ||
+			errors.Is(err, core.ErrJournalClosed) {
 			httpapi.Fail(w, r, http.StatusConflict, httpapi.ErrorBody{
 				Code:      "AGENT_STREAM_CURSOR_EXPIRED",
 				Kind:      "conflict",
@@ -83,11 +109,18 @@ func (c *RunController) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	heartbeat := time.NewTicker(c.heartbeatInterval)
+	defer heartbeat.Stop()
 	terminal := false
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-heartbeat.C:
+			if err := writeAgentStreamHeartbeat(w); err != nil {
+				c.logger.Error("write agent stream heartbeat", "error", err)
+				return
+			}
 		case chunk, open := <-events:
 			if !open {
 				return

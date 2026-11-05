@@ -290,8 +290,9 @@ server/internal/platform/store/migrations/002_agent.sql
 约束：
 
 - `PRIMARY KEY(operation, client_request_id)`。
-- 相同 key 和相同 hash 返回原结果。
-- 相同 key 和不同 hash 返回 `AGENT_IDEMPOTENCY_CONFLICT`。
+- 相同 key 和相同 hash 且 Run 仍在执行时返回 `409 AGENT_SESSION_BUSY`，并携带原 `runId` 与当前状态。
+- 相同 key 和相同 hash 且 Run 已终态时返回 `409 AGENT_REQUEST_ALREADY_PROCESSED`，并携带原 `runId` 与最终状态。
+- 相同 key 和不同 hash 返回 `409 AGENT_REQUEST_ID_CONFLICT`。
 
 ## 8. Run 生命周期
 
@@ -348,21 +349,23 @@ Run Coordinator 使用独立 Run Context，不继承 HTTP 请求 Context。
 
 正常完成、失败或取消时：
 
-1. 离开 HTTP/Pipe 的短生命周期，创建有限时长的持久化 Context。
-2. 在一个事务中更新 Part 最终文本和状态。
-3. 更新消息状态和 Run 终态。
-4. 完成 Step。
-5. 写入对应终止 RunEvent 和下一个生命周期序号。
-6. 更新 Session 活动时间。
-7. 提交事务。
-8. 向事件日志发布终止 chunk。
+1. 在一个并发安全的终态裁决点确定 completed、failed 或 cancelled；终态一旦被声明，取消请求等待最终结果，不再覆盖已提交方向。
+2. 离开 HTTP/Pipe 的短生命周期，创建有限时长的持久化 Context。
+3. 在一个事务中更新 Part 最终文本和状态。
+4. 更新消息状态和 Run 终态。
+5. 完成 Step。
+6. 写入对应终止 RunEvent 和下一个生命周期序号。
+7. 更新 Session 活动时间。
+8. 提交事务。
+9. 向事件日志发布终止 chunk。
 
 如果终止事务失败：
 
 - 不向浏览器发送虚假的成功终止事件。
-- 记录内部错误。
-- Run 保持 `running`，由服务重启恢复或后续 watchdog 收敛。
-- 客户端最终通过 Session 详情读取真实持久化状态。
+- 使用脱离请求 Context 的有限时长 Context 和有限重试。
+- 首次发送、重试在 Coordinator 启动失败时也使用同一持久化策略；Coordinator 尚未注册不能成为遗留 `running` 的理由。
+- 终态写入重试耗尽后执行 `InterruptAgentRun`，把 Run、Step、Message 和 Part 收敛为 `interrupted`。
+- 如果 Finalize 和 Interrupt 都失败，记录内部错误，并在临时 Journal TTL 到期后释放内存所有权；客户端重新读取 Session 详情，进程重启时由启动恢复继续收敛。
 
 ## 10. 实时事件日志与游标
 
@@ -386,7 +389,8 @@ type RunStreamEvent = {
 - `start` 使用原游标，客户端游标只允许取最大值，不能后退。
 - `after` 小于可回放窗口起点时，客户端必须重新获取 Session 详情，再从详情中的当前 Part 快照继续。
 - 实时日志在 Run 终止后保留 5 分钟，支持终止边界重连；过期后以数据库终态为准。
-- 单个 Run 的实时日志设置 8 MiB 上限。超过上限时停止新增订阅并返回稳定恢复错误，跑完的最终文本仍正常持久化。
+- 单个 Run 的实时日志设置 8 MiB 上限。超过上限时永久关闭 Journal，现有订阅结束，后续订阅返回 `AGENT_STREAM_CURSOR_EXPIRED`；Run 仍完成持久化收敛，客户端通过 Session 详情对账。
+- 活跃 SSE 每 15 秒写入一次 `: keep-alive` 注释并立即 flush，避免中间代理把无 token 的连接视为空闲。
 
 内存日志是实时恢复缓存，不是长期事实来源。Session 详情始终以数据库记录为基础，并在 Run 仍活跃时合并 Coordinator 的当前文本和游标。
 
@@ -495,7 +499,11 @@ POST /api/v1/agent/message/send
 }
 ```
 
-相同 `clientRequestId` 和相同请求摘要必须返回同一 RunHandle。
+相同 `clientRequestId` 和相同请求摘要不能重新启动原 Run：
+
+- Run 正在执行时返回 `409 AGENT_SESSION_BUSY`，`details` 包含原 `runId` 和 `running`。
+- Run 已终态时返回 `409 AGENT_REQUEST_ALREADY_PROCESSED`，`details` 包含原 `runId` 和最终状态。
+- 相同标识对应不同请求摘要时返回 `409 AGENT_REQUEST_ID_CONFLICT`，`details` 包含 `clientRequestId`。
 
 ### 11.5 重试
 
@@ -587,6 +595,8 @@ resumeRun(
 4. 将协议事件物化为 AgentMessageSnapshot。
 5. 返回最终 Run 状态。
 
+POST 响应丢失时，前端重新读取 Session 详情，并且只恢复与当前请求绑定的 Run。发送请求按用户消息 ID 绑定；重试请求同时校验新 `activeRunId` 不等于重试前的 Run，避免旧页面恢复成后续尝试。
+
 ### 12.2 页面刷新
 
 `loadSession()` 的恢复流程：
@@ -610,7 +620,8 @@ ApiAgentModel 持有当前 Run 的 `lastSequence`：
 - 使用 `after=<lastSequence>`。
 - 指数退避，次数和总时长有上限。
 - 重连期间 Store 保留已有内容，不显示临时错误横幅。
-- 超过重试上限后返回稳定错误，但用户再次进入页面仍可通过 `loadSession()` 恢复。
+- 超过重试上限或 Event Journal 已关闭时，重新读取 Session 详情；持久化终态存在则完成对账，不存在则返回 `AGENT_RUN_INTERRUPTED`，不能停留在只有心跳的无限订阅中。
+- 旧页面的 `runId` 已被同一助手消息的新 Run 取代时，不读取新 Run 的文本或状态，也不订阅旧 Run。
 - Effect 对同一 Run 只允许一个活动订阅，避免页面刷新、Sidebar 和 Route 重新渲染触发重复流。
 
 ### 12.4 停止
@@ -627,8 +638,9 @@ Composer 的停止操作：
 
 - `session.create`、`message.send` 和 `message.retry` 都使用 `(operation, client_request_id)`。
 - 请求摘要由服务端规范化 JSON 后计算 SHA-256。
-- 相同 key 和 hash 返回原 Session 或 Run。
-- 相同 key 和不同 hash 返回 `409 AGENT_IDEMPOTENCY_CONFLICT`。
+- Session 创建在相同 key 和 hash 下返回原 Session。
+- 发送和重试在相同 key 和 hash 下不重放执行：运行中返回 `AGENT_SESSION_BUSY`，终态返回 `AGENT_REQUEST_ALREADY_PROCESSED`。
+- 相同 key 和不同 hash 返回 `409 AGENT_REQUEST_ID_CONFLICT`。
 - 发送前事务检查 Session 是否已有 `running` Run。
 - SQLite 部分唯一索引提供最后约束。
 - Coordinator 注册 Run 时使用内存锁再次防止同 Session 双执行。
@@ -640,7 +652,9 @@ Composer 的停止操作：
 | Session 不存在 | `AGENT_SESSION_NOT_FOUND` | 404 | false |
 | Run 不存在 | `AGENT_RUN_NOT_FOUND` | 404 | false |
 | Session 已有运行中 Run | `AGENT_SESSION_BUSY` | 409 | false |
-| 幂等键内容冲突 | `AGENT_IDEMPOTENCY_CONFLICT` | 409 | false |
+| 幂等请求仍在执行 | `AGENT_SESSION_BUSY` | 409 | false |
+| 幂等请求已经完成 | `AGENT_REQUEST_ALREADY_PROCESSED` | 409 | false |
+| 幂等键内容冲突 | `AGENT_REQUEST_ID_CONFLICT` | 409 | false |
 | 消息不可重试 | `AGENT_MESSAGE_NOT_RETRYABLE` | 409 | false |
 | 可回放窗口丢失 | `AGENT_STREAM_CURSOR_EXPIRED` | 409 | true |
 | 数据库写入失败 | `AGENT_PERSISTENCE_FAILED` | 500 | true |
@@ -654,14 +668,18 @@ Composer 的停止操作：
 
 沿用现有限制：
 
-- 最多 100 条上下文消息。
+- 模型上下文最多保留最近 20 个完整轮次、40 条消息。
+- 上下文正文总量最多 20,000 个 Unicode 字符，超限时从最旧完整轮次开始截断，并始终保留当前用户消息。
 - 单条消息最多 100,000 Unicode 字符。
 - 标识符最多 200 字符。
 
 新增限制：
 
 - 一个 Session 同时最多一个 running Run。
+- 单个 Run 最长执行 120 秒；Provider 连续 30 秒没有可观察输出时判定空闲超时。
 - 实时事件日志每 Run 最多 8 MiB。
+- Event Journal 超过上限后永久关闭，新订阅返回 `AGENT_STREAM_CURSOR_EXPIRED`，不能退化为只发送心跳。
+- SSE 每 15 秒发送一次 `: keep-alive` 注释心跳，心跳不进入领域事件或 Zustand。
 - Session 详情首期一次返回全部消息；分页契约保留 `nextMessageCursor`，当前为 `null`。
 - 慢 SSE 订阅者使用有界发送队列，队列满时断开并由客户端重连。
 - Session 详情只加载助手消息当前 `active_run_id` 对应的 Part；旧重试历史保留但不混入当前气泡。
@@ -680,6 +698,8 @@ Composer 的停止操作：
 | `server/internal/agent/core/service.go` | Session CRUD、发送、重试、取消和详情组合 |
 | `server/internal/agent/core/coordinator.go` | 后台 Run 执行、终止事务和启动恢复 |
 | `server/internal/agent/core/event_journal.go` | 有界实时事件日志、订阅者和游标回放 |
+| `server/internal/agent/core/runtime_config.go` | Run 总时长、空闲超时、Finalize 重试和 Journal TTL 默认值 |
+| `server/internal/agent/core/run_persistence.go` | 脱离请求 Context 的 Finalize / Interrupt 有限重试 |
 | `server/internal/agent/access/session_controller.go` | Session 与消息 JSON 路由 |
 | `server/internal/agent/access/run_controller.go` | Run 订阅和取消路由 |
 | `server/internal/platform/store/agent_store.go` | SQLite Repository、事务和启动恢复查询 |
@@ -689,7 +709,7 @@ Composer 的停止操作：
 
 | 文件 | 修改 |
 | --- | --- |
-| `server/internal/platform/store/sqlite_store.go` | 嵌入并按文件名顺序执行全部迁移；暴露同一 `*sql.DB` 给 Agent Repository |
+| `server/internal/platform/store/sqlite_store.go` | 嵌入并按文件名顺序执行迁移；用 `schema_migrations` 保存文件名、SHA-256 和完成时间；暴露同一 `*sql.DB` 给 Agent Repository |
 | `server/cmd/craftingtabled/main.go` | 组装 Agent Repository、Service、Coordinator 和 Controllers；启动恢复 |
 | `server/internal/agent/access/stream_controller.go` | 删除无状态 Provider 转发职责，或拆分后仅保留 UI Message Stream 编码器 |
 | `server/internal/agent/provider/openai_compatible.go` | 保持 Provider Port；确认 Context 由 Run Coordinator 传入 |
@@ -727,7 +747,9 @@ Composer 的停止操作：
 | --- | --- |
 | `tests/e2e/integration/agent_persistence.integration_test.go` | Session/Message/Part 持久化、重启读取、遗留 Run 收敛 |
 | `tests/e2e/integration/agent_recovery.integration_test.go` | 客户端断开后服务端继续、游标回放、取消 |
-| `tests/e2e/integration/agent_idempotency.integration_test.go` | 创建、发送和重试幂等 |
+| `tests/e2e/integration/agent_idempotency_api.integration_test.go` | 请求 ID 冲突、运行中重放和终态重放 |
+| `tests/e2e/integration/agent_stream_heartbeat.integration_test.go` | SSE 注释心跳与 flush |
+| `tests/e2e/integration/migrations.integration_test.go` | 迁移账本、checksum 篡改和旧库升级 |
 | `tests/e2e/unit/agent/apiAgentModel.test.ts` | API 编排、游标跟踪、断线重连 |
 | `tests/e2e/unit/agent/agentRunClient.test.ts` | RunHandle 校验、退避、游标过期 |
 | `tests/e2e/unit/agent/agentStreamProtocol.test.ts` | SSE id、重复回放、游标不可后退 |
@@ -757,12 +779,18 @@ Composer 的停止操作：
 16. 游标过期返回稳定错误并可通过 Session 详情恢复。
 17. Zustand 不直接持有 SSE chunk 或数据库对象。
 18. UI 在恢复过程中不出现重复消息或重复 token。
+19. Session 详情在同一只读事务中读取，不能混合 running 与 terminal 状态。
+20. 旧 Run 的恢复不能读取同一助手消息的新 Run 内容。
+21. Durable RunEvent 序号不能作为 SSE 恢复游标。
+22. 完成、取消和超时在最终提交前经过同一次终态裁决。
+23. Coordinator 启动失败时，Finalize 使用脱离请求的 Context 和有限重试。
 
 ## 18. 迁移和兼容
 
 - 现有 `items` 与 `categories` 表不修改。
-- `001_initial.sql` 保持幂等。
-- 新增 `002_agent.sql`，按文件名顺序执行。
+- 迁移按文件名顺序执行，并创建 `schema_migrations(name, checksum, applied_at)` 账本。
+- 已应用迁移只比较 SHA-256，不重复执行；checksum 不一致时拒绝启动，防止已有数据库悄悄偏离代码。
+- 尚无账本的旧数据库执行带 `IF NOT EXISTS` / `INSERT OR IGNORE` 的迁移后写入账本，不丢失已有 Today 数据。
 - 旧浏览器内存 Session 不迁移；当前尚未进入生产，无法保证其数据存在。
 - 现有 `/api/v1/agent/stream` 不再作为前端主路径。
 - 为降低一次变更范围，可在迁移期临时保留旧路由，但它不得继续被视为持久化接口。
@@ -793,7 +821,7 @@ Composer 的停止操作：
 - 同一幂等请求不会重复创建 Session、Message 或 Run。
 - Provider Key 不出现在数据库、日志、浏览器请求或响应。
 - 所有测试继续位于 `tests/e2e` 的对应模块。
-- `pnpm typecheck`、`pnpm test`、`go test ./server/... ./tests/e2e/integration/...`、`go vet ./server/...`、`gofmt -d`、`pnpm test:e2e` 和 `pnpm build` 通过。
+- `pnpm typecheck`、`pnpm test`、`go test ./server/... ./tests/e2e/integration/... ./tests/e2e/unit/agent`、`go vet ./server/...`、`gofmt -d`、`pnpm test:e2e` 和 `pnpm build` 通过。
 
 ## 21. SDD 门禁
 
@@ -820,6 +848,13 @@ Design Spec
 - 单进程 Run Coordinator 持有 Provider Context，HTTP 订阅断开不取消 Run。
 - 内存 Event Journal 保存当前 Run 的 UI chunks，SSE `id` 提供单调游标。
 - 页面刷新后读取 Session 详情，并从 `activeRun.lastSequence` 恢复订阅。
+- Session 详情在一个只读事务内读取；`activeRun.lastSequence` 只由 Coordinator Journal 覆盖，不再复用 durable RunEvent 序号。
+- 发送和重试的幂等重放不会重新启动原 Run；运行中与终态分别返回 `AGENT_SESSION_BUSY` 和 `AGENT_REQUEST_ALREADY_PROCESSED`。
+- Run 最长 120 秒、空闲 30 秒；SSE 每 15 秒发送注释心跳。
+- 终态提交使用独立 Context、3 次默认 Finalize 重试和 Interrupt 兜底；取消与完成通过同一裁决点决定。
+- Event Journal 上限 8 MiB，溢出后永久关闭并通过 Session 详情恢复。
+- SQLite 迁移使用文件名和 checksum 账本，旧数据库升级保留 Today 数据。
+- 前端恢复强制校验 `runId`，旧页面不会读取同一助手消息后续尝试的内容。
 - Go 进程重启时只把遗留 `running` Run 收敛为 `interrupted`，不续接原 Provider 流，也不伪造 token。
 
 主要代码：
@@ -828,6 +863,8 @@ Design Spec
 - `server/internal/platform/store/agent_store.go`
 - `server/internal/agent/core/coordinator.go`
 - `server/internal/agent/core/event_journal.go`
+- `server/internal/agent/core/runtime_config.go`
+- `server/internal/agent/core/run_persistence.go`
 - `server/internal/agent/access/session_controller.go`
 - `server/internal/agent/access/run_controller.go`
 - `src/models/agentTransport.ts`
@@ -839,11 +876,13 @@ Design Spec
 
 - `tests/e2e/integration/agent_persistence.integration_test.go`
 - `tests/e2e/integration/agent_recovery.integration_test.go`
-- `tests/e2e/integration/agent_integration_api.integration_test.go`
+- `tests/e2e/integration/agent_idempotency_api.integration_test.go`
+- `tests/e2e/integration/agent_stream_heartbeat.integration_test.go`
+- `tests/e2e/integration/migrations.integration_test.go`
 - `tests/e2e/unit/agent/agentRunClient.test.ts`
 - `tests/e2e/unit/agent/apiAgentModel.test.ts`
 - `tests/e2e/unit/agent/agentEffect.test.ts`
-- `tests/e2e/unit/agent/openai_provider_test.go`
+- `tests/e2e/unit/agent/event_journal_test.go`
 - `tests/e2e/modules/agent/navigation.e2e.ts`
 - `tests/e2e/modules/agent/chat.e2e.ts`
 

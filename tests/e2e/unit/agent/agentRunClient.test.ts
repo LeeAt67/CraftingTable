@@ -81,6 +81,15 @@ function baseInput(
     afterSequence: 0,
     signal: new AbortController().signal,
     materializer: materializer(),
+    recreateMaterializer: (snapshot) =>
+      createAgentRunMaterializer({
+        sessionId: "session-1",
+        runId: "run-1",
+        userMessageId: "user-1",
+        assistantMessageId: "assistant-1",
+        assistantPartId: "part-1",
+        initialSnapshot: snapshot,
+      }),
     handlers: {
       onStarted: () => undefined,
       onSnapshot: () => undefined,
@@ -281,5 +290,240 @@ describe("AgentRunClient", () => {
       partStatuses: ["failed", "failed"],
       errorCode: "AGENT_PROVIDER_FAILED",
     });
+  });
+
+  it("reports a local abort without claiming the server run was cancelled", async () => {
+    const controller = new AbortController();
+    const input = baseInput(
+      (_request, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => {
+              reject(new DOMException("aborted", "AbortError"));
+            },
+            { once: true },
+          );
+        }),
+    );
+    input.signal = controller.signal;
+
+    const pending = consumeAgentRun(input);
+    controller.abort();
+    const [result, error] = await pending;
+
+    expect(result).toBeNull();
+    expect(error?.code).toBe("REQUEST_CANCELLED");
+  });
+
+  it("reconciles persisted terminal state after the retry budget is exhausted", async () => {
+    const requestedUrls: string[] = [];
+    const input = baseInput(async (request) => {
+      const url = String(request);
+      requestedUrls.push(url);
+      if (url.includes("/agent/run/stream")) {
+        throw new TypeError("network unavailable");
+      }
+      return jsonResponse({
+        data: {
+          session: {
+            id: "session-1",
+            title: "恢复会话",
+            createdAt: "2026-11-05T00:00:00Z",
+            updatedAt: "2026-11-05T00:00:02Z",
+          },
+          messages: [
+            {
+              id: "assistant-1",
+              sessionId: "session-1",
+              seq: 2,
+              role: "assistant",
+              status: "complete",
+              activeRunId: "run-1",
+              userMessageId: "user-1",
+              createdAt: "2026-11-05T00:00:01Z",
+              updatedAt: "2026-11-05T00:00:02Z",
+            },
+          ],
+          messageParts: [
+            {
+              id: "part-1",
+              messageId: "assistant-1",
+              runId: "run-1",
+              index: 0,
+              type: "text",
+              status: "complete",
+              content: { type: "text", text: "持久化完成" },
+              createdAt: "2026-11-05T00:00:01Z",
+              updatedAt: "2026-11-05T00:00:02Z",
+            },
+          ],
+          activeRun: null,
+          nextMessageCursor: null,
+        },
+      });
+    });
+    input.maxRetries = 0;
+    const snapshots: string[] = [];
+    input.handlers.onSnapshot = (snapshot) => {
+      const part = snapshot.parts.find((candidate) => candidate.type === "text");
+      if (part?.type === "text") {
+        snapshots.push(part.content.text);
+      }
+    };
+
+    const [result, error] = await consumeAgentRun(input);
+
+    expect(error).toBeNull();
+    expect(result?.status).toBe("completed");
+    expect(snapshots).toEqual(["持久化完成"]);
+    expect(requestedUrls).toEqual([
+      "/api/v1/agent/run/stream?runId=run-1&after=0",
+      "/api/v1/agent/session/get?sessionId=session-1",
+    ]);
+  });
+
+  it("continues from persisted cursor when recovery still finds a running run", async () => {
+    const requestedUrls: string[] = [];
+    let streamAttempts = 0;
+    const input = baseInput(async (request) => {
+      const url = String(request);
+      requestedUrls.push(url);
+      if (url.includes("/agent/run/stream")) {
+        streamAttempts += 1;
+        if (streamAttempts === 1) {
+          throw new TypeError("network unavailable");
+        }
+        return streamResponse([
+          startFrame(2),
+          textFrame(3, "后续"),
+          finishFrame(4),
+          "data: [DONE]\n\n",
+        ]);
+      }
+      return jsonResponse({
+        data: {
+          session: {
+            id: "session-1",
+            title: "恢复会话",
+            createdAt: "2026-11-05T00:00:00Z",
+            updatedAt: "2026-11-05T00:00:02Z",
+          },
+          messages: [
+            {
+              id: "assistant-1",
+              sessionId: "session-1",
+              seq: 2,
+              role: "assistant",
+              status: "streaming",
+              activeRunId: "run-1",
+              userMessageId: "user-1",
+              createdAt: "2026-11-05T00:00:01Z",
+              updatedAt: "2026-11-05T00:00:02Z",
+            },
+          ],
+          messageParts: [
+            {
+              id: "part-1",
+              messageId: "assistant-1",
+              runId: "run-1",
+              index: 0,
+              type: "text",
+              status: "streaming",
+              content: { type: "text", text: "已有" },
+              createdAt: "2026-11-05T00:00:01Z",
+              updatedAt: "2026-11-05T00:00:02Z",
+            },
+          ],
+          activeRun: {
+            runId: "run-1",
+            status: "running",
+            lastSequence: 2,
+          },
+          nextMessageCursor: null,
+        },
+      });
+    });
+    input.maxRetries = 0;
+    const snapshots: string[] = [];
+    input.handlers.onSnapshot = (snapshot) => {
+      const part = snapshot.parts.find((candidate) => candidate.type === "text");
+      if (part?.type === "text") {
+        snapshots.push(part.content.text);
+      }
+    };
+
+    const [result, error] = await consumeAgentRun(input);
+
+    expect(error).toBeNull();
+    expect(result?.status).toBe("completed");
+    expect(snapshots.at(0)).toBe("已有");
+    expect(snapshots.at(-1)).toBe("已有后续");
+    expect(requestedUrls).toEqual([
+      "/api/v1/agent/run/stream?runId=run-1&after=0",
+      "/api/v1/agent/session/get?sessionId=session-1",
+      "/api/v1/agent/run/stream?runId=run-1&after=2",
+    ]);
+  });
+
+  it("rejects persisted detail when the assistant now belongs to another run", async () => {
+    const snapshots: string[] = [];
+    const input = baseInput(async (request) => {
+      const url = String(request);
+      if (url.includes("/agent/run/stream")) {
+        throw new TypeError("network unavailable");
+      }
+      return jsonResponse({
+        data: {
+          session: {
+            id: "session-1",
+            title: "重试后的会话",
+            createdAt: "2026-11-05T00:00:00Z",
+            updatedAt: "2026-11-05T00:00:03Z",
+          },
+          messages: [
+            {
+              id: "assistant-1",
+              sessionId: "session-1",
+              seq: 2,
+              role: "assistant",
+              status: "complete",
+              activeRunId: "run-2",
+              userMessageId: "user-1",
+              createdAt: "2026-11-05T00:00:01Z",
+              updatedAt: "2026-11-05T00:00:03Z",
+            },
+          ],
+          messageParts: [
+            {
+              id: "part-2",
+              messageId: "assistant-1",
+              runId: "run-2",
+              index: 0,
+              type: "text",
+              status: "complete",
+              content: { type: "text", text: "新 Run 的内容" },
+              createdAt: "2026-11-05T00:00:02Z",
+              updatedAt: "2026-11-05T00:00:03Z",
+            },
+          ],
+          activeRun: null,
+          nextMessageCursor: null,
+        },
+      });
+    });
+    input.maxRetries = 0;
+    input.handlers.onSnapshot = (snapshot) => {
+      const part = snapshot.parts.find((candidate) => candidate.type === "text");
+      if (part?.type === "text") {
+        snapshots.push(part.content.text);
+      }
+    };
+
+    const [result, error] = await consumeAgentRun(input);
+
+    expect(result).toBeNull();
+    expect(error?.code).toBe("AGENT_RUN_INTERRUPTED");
+    expect(snapshots).toEqual([]);
   });
 });

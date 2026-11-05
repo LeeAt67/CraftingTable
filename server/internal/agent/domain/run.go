@@ -21,6 +21,12 @@ type Run struct {
 	UpdatedAt          string    `json:"updatedAt"`
 }
 
+type RunEvent struct {
+	Sequence int            `json:"sequence"`
+	Type     string         `json:"type"`
+	Payload  map[string]any `json:"payload"`
+}
+
 type ContextMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -30,6 +36,7 @@ type RunExecution struct {
 	Run             Run
 	AssistantPartID string
 	Messages        []ContextMessage
+	Replayed        bool
 }
 
 type RunHandle struct {

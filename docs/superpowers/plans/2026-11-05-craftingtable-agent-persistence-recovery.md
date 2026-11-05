@@ -1,6 +1,6 @@
 # CraftingTable Agent Persistence And Recovery Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Persist Agent sessions and messages in SQLite, own Run execution outside HTTP request lifetimes, and recover partial Agent output after browser refresh or network reconnect.
 
@@ -93,7 +93,7 @@ tests/e2e/
 - Consumes: existing `store.OpenSQLite(ctx, filename)` and `SQLiteStore.Close()`.
 - Produces: `core.Repository`; `domain.Session`, `domain.Message`, `domain.MessagePart`, `domain.Run`, `domain.SessionDetail`; `SQLiteStore.CreateAgentSession`, `ListAgentSessions`, `GetAgentSession`, `CreateAgentSendRun`, `CreateAgentRetryRun`, `FinalizeAgentRun`, `GetAgentRun`, `RecoverInterruptedAgentRuns`.
 
-- [ ] **Step 1: Write the failing persistence test**
+- [x] **Step 1: Write the failing persistence test**
 
 Create `tests/e2e/integration/agent_persistence.integration_test.go`:
 
@@ -178,7 +178,7 @@ func TestAgentSessionAndCompletedMessageSurviveReopen(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test and verify it fails for missing APIs**
+- [x] **Step 2: Run the test and verify it fails for missing APIs**
 
 Run:
 
@@ -188,7 +188,7 @@ go test ./tests/e2e/integration -run TestAgentSessionAndCompletedMessageSurviveR
 
 Expected: FAIL because `CreateAgentSession`, `CreateAgentSendRun`, `FinalizeAgentRun`, `GetAgentSession` and domain types do not exist.
 
-- [ ] **Step 3: Add the Agent domain types**
+- [x] **Step 3: Add the Agent domain types**
 
 Create `server/internal/agent/domain/session.go`:
 
@@ -379,7 +379,7 @@ type Repository interface {
 }
 ```
 
-- [ ] **Step 4: Add ordered migration execution**
+- [x] **Step 4: Add ordered migration execution**
 
 Create `server/internal/platform/store/migrations/002_agent.sql` with the seven tables from the approved design. Include these non-negotiable constraints:
 
@@ -504,7 +504,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 
 Replace the single embedded migration execution with `applyMigrations(ctx, db)`.
 
-- [ ] **Step 5: Implement the SQLite Agent repository**
+- [x] **Step 5: Implement the SQLite Agent repository**
 
 Create `server/internal/platform/store/agent_store.go`. Implement a transaction helper:
 
@@ -568,7 +568,7 @@ func contextMessages(messages []domain.Message, parts []domain.MessagePart) []do
 
 `GetAgentSession` returns all messages, but only Parts for a user message or the assistant message's current `active_run_id`.
 
-- [ ] **Step 6: Run the focused persistence test**
+- [x] **Step 6: Run the focused persistence test**
 
 Run:
 
@@ -578,7 +578,7 @@ go test ./tests/e2e/integration -run TestAgentSessionAndCompletedMessageSurviveR
 
 Expected: PASS.
 
-- [ ] **Step 7: Add recovery and idempotency repository tests**
+- [x] **Step 7: Add recovery and idempotency repository tests**
 
 Append tests to `agent_persistence.integration_test.go`:
 
@@ -635,7 +635,7 @@ func TestDuplicateSendRequestReturnsSameRun(t *testing.T) {
 }
 ```
 
-- [ ] **Step 8: Run the full persistence test file**
+- [x] **Step 8: Run the full persistence test file**
 
 Run:
 
@@ -645,7 +645,7 @@ go test ./tests/e2e/integration -run "TestAgent|TestRecover|TestDuplicate" -v
 
 Expected: PASS.
 
-- [ ] **Step 9: Format and commit**
+- [x] **Step 9: Format and commit**
 
 Run:
 
@@ -670,7 +670,7 @@ git commit -m "feat: persist agent sessions and messages"
 - Consumes: `domain.RunStatus` and `domain.Error`.
 - Produces: `core.StreamChunk`, `core.JournalSnapshot`, `core.NewEventJournal()`, `Journal.Append(StreamChunk) error`, `Journal.Snapshot() JournalSnapshot`, `Journal.Subscribe(after int) (<-chan StreamChunk, func(), error)`, `Journal.Close()`.
 
-- [ ] **Step 1: Write the failing replay test**
+- [x] **Step 1: Write the failing replay test**
 
 Create `tests/e2e/unit/agent/event_journal_test.go`:
 
@@ -708,7 +708,7 @@ func TestEventJournalReplaysOnlyEventsAfterCursor(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test and verify missing package API**
+- [x] **Step 2: Run test and verify missing package API**
 
 Run:
 
@@ -718,7 +718,7 @@ go test ./tests/e2e/unit/agent -run TestEventJournalReplaysOnlyEventsAfterCursor
 
 Expected: FAIL because `core.NewEventJournal` and `StreamChunk` do not exist.
 
-- [ ] **Step 3: Implement stream chunks and journal**
+- [x] **Step 3: Implement stream chunks and journal**
 
 Create `server/internal/agent/core/stream_chunk.go`:
 
@@ -785,7 +785,7 @@ func (j *EventJournal) Append(chunk StreamChunk) error {
 
 `Subscribe(after)` validates `after <= lastSequence`, creates a buffered channel, registers it under the mutex, and sends existing chunks after the cursor non-blockingly.
 
-- [ ] **Step 4: Add tests for full journal and slow subscriber**
+- [x] **Step 4: Add tests for full journal and slow subscriber**
 
 Append to `event_journal_test.go`:
 
@@ -819,7 +819,7 @@ func TestEventJournalDropsSlowSubscriberWithoutBlocking(t *testing.T) {
 }
 ```
 
-- [ ] **Step 5: Run journal tests**
+- [x] **Step 5: Run journal tests**
 
 Run:
 
@@ -829,7 +829,7 @@ go test ./tests/e2e/unit/agent -run TestEventJournal -v
 
 Expected: PASS.
 
-- [ ] **Step 6: Format and commit**
+- [x] **Step 6: Format and commit**
 
 Run:
 
@@ -855,7 +855,7 @@ git commit -m "feat: add replayable agent run journal"
 - Consumes: `core.Repository`, `EventJournal`, existing Provider SSE parser.
 - Produces: `core.ProviderMessage`, `core.StreamProvider`, `core.RunSnapshot`, `core.NewService(repository, provider, logger)`, `Service.CreateSession`, `ListSessions`, `GetSession`, `SendMessage`, `RetryMessage`, `CancelRun`, `SubscribeRun`, `Coordinator.Start(domain.RunExecution) error`, `Coordinator.Snapshot(runID) (RunSnapshot, bool)`.
 
-- [ ] **Step 1: Write the failing browser-disconnect test**
+- [x] **Step 1: Write the failing browser-disconnect test**
 
 Create `tests/e2e/integration/agent_recovery.integration_test.go` with a fake provider that emits two slow chunks:
 
@@ -984,7 +984,7 @@ func TestAgentRunContinuesAfterSubscriberDisconnects(t *testing.T) {
 
 Add `bufio`, `fmt`, and `strings` to the test file imports.
 
-- [ ] **Step 2: Run test and verify routes are missing**
+- [x] **Step 2: Run test and verify routes are missing**
 
 Run:
 
@@ -994,7 +994,7 @@ go test ./tests/e2e/integration -run TestAgentRunContinuesAfterSubscriberDisconn
 
 Expected: FAIL with HTTP 404 for the new routes.
 
-- [ ] **Step 3: Add Provider Port and adapt the provider adapter**
+- [x] **Step 3: Add Provider Port and adapt the provider adapter**
 
 Create `server/internal/agent/core/ports.go`:
 
@@ -1030,7 +1030,7 @@ func ContextMessages(messages []domain.ContextMessage) []ProviderMessage {
 
 Modify `provider.NewOpenAICompatible` to implement `Stream(context.Context, []core.ProviderMessage)`. Keep the Provider's key, URL and SSE parsing hidden inside the adapter.
 
-- [ ] **Step 4: Implement Service use cases**
+- [x] **Step 4: Implement Service use cases**
 
 Create `server/internal/agent/core/service.go`. Public behavior:
 
@@ -1082,7 +1082,7 @@ type RunSnapshot struct {
 
 `CancelRun` validates Session/Run ownership and calls Coordinator. It must not mutate a terminal Run back to cancelled.
 
-- [ ] **Step 5: Implement Run Coordinator**
+- [x] **Step 5: Implement Run Coordinator**
 
 Create `server/internal/agent/core/coordinator.go`. Start uses an application-owned context:
 
@@ -1116,7 +1116,7 @@ func (c *Coordinator) Start(execution domain.RunExecution) error {
 7. On cancellation, persist `cancelled` and append the cancellation terminal sequence.
 8. Remove the active coordinator entry only after the journal terminal event is published.
 
-- [ ] **Step 6: Add startup recovery**
+- [x] **Step 6: Add startup recovery**
 
 Expose:
 
@@ -1129,7 +1129,7 @@ func (c *Coordinator) Recover(ctx context.Context) error {
 
 The composition root calls `Recover` before registering HTTP routes.
 
-- [ ] **Step 7: Run recovery test**
+- [x] **Step 7: Run recovery test**
 
 Run:
 
@@ -1139,7 +1139,7 @@ go test ./tests/e2e/integration -run TestAgentRunContinuesAfterSubscriberDisconn
 
 Expected: PASS.
 
-- [ ] **Step 8: Format and commit**
+- [x] **Step 8: Format and commit**
 
 Run:
 
@@ -1167,7 +1167,7 @@ git commit -m "feat: own agent runs outside http requests"
 - Consumes: `core.Service`, `core.Coordinator`, `httpapi.Router`.
 - Produces: all seven approved Agent routes and stable JSON error mapping.
 
-- [ ] **Step 1: Write failing HTTP contract tests**
+- [x] **Step 1: Write failing HTTP contract tests**
 
 Create `tests/e2e/integration/agent_integration_api.integration_test.go`:
 
@@ -1428,7 +1428,7 @@ func removeRunJournalAfterTerminal(
 
 `removeRunJournalAfterTerminal` calls a test-only route that is registered only when `CRAFTINGTABLE_TEST_HOOKS=1`. The route deletes the in-memory journal and never deletes SQLite data.
 
-- [ ] **Step 2: Run tests and verify 404**
+- [x] **Step 2: Run tests and verify 404**
 
 Run:
 
@@ -1438,7 +1438,7 @@ go test ./tests/e2e/integration -run "TestAgentSessionApi|TestAgentRunStream" -v
 
 Expected: FAIL because the new routes are not registered.
 
-- [ ] **Step 3: Implement Session Controller**
+- [x] **Step 3: Implement Session Controller**
 
 Create `server/internal/agent/access/session_controller.go`. Register:
 
@@ -1454,7 +1454,7 @@ func (c *SessionController) Register(router *httpapi.Router) {
 
 Request shapes must exactly match the approved design. Compute the request hash in the Service from canonical JSON, not from untrusted headers.
 
-- [ ] **Step 4: Implement Run Controller and SSE encoder**
+- [x] **Step 4: Implement Run Controller and SSE encoder**
 
 Create `server/internal/agent/access/run_controller.go`:
 
@@ -1479,7 +1479,7 @@ close subscription when the request context ends
 
 Move existing UI chunk structs into `ui_stream.go`. Encode `StreamChunk` into the current `start`, `start-step`, `text-start`, `text-delta`, `text-end`, `finish-step`, `finish` and `error` JSON shapes.
 
-- [ ] **Step 5: Map stable errors**
+- [x] **Step 5: Map stable errors**
 
 Use these mappings:
 
@@ -1487,7 +1487,8 @@ Use these mappings:
 AGENT_SESSION_NOT_FOUND       404
 AGENT_RUN_NOT_FOUND           404
 AGENT_SESSION_BUSY            409
-AGENT_IDEMPOTENCY_CONFLICT    409
+AGENT_REQUEST_ALREADY_PROCESSED 409
+AGENT_REQUEST_ID_CONFLICT     409
 AGENT_MESSAGE_NOT_RETRYABLE   409
 AGENT_STREAM_CURSOR_EXPIRED   409
 AGENT_NOT_CONFIGURED          503
@@ -1496,7 +1497,7 @@ AGENT_PERSISTENCE_FAILED      500
 
 Never return raw SQLite errors.
 
-- [ ] **Step 6: Wire the composition root**
+- [x] **Step 6: Wire the composition root**
 
 Modify `server/cmd/craftingtabled/main.go`:
 
@@ -1522,7 +1523,7 @@ access.NewRunController(agentService, logger).Register(router)
 
 Keep Today registration and route behavior unchanged.
 
-- [ ] **Step 7: Run HTTP and existing Go tests**
+- [x] **Step 7: Run HTTP and existing Go tests**
 
 Run:
 
@@ -1533,7 +1534,7 @@ go test ./server/... ./tests/e2e/integration/...
 
 Expected: PASS, including existing Today tests.
 
-- [ ] **Step 8: Format and commit**
+- [x] **Step 8: Format and commit**
 
 Run:
 
@@ -1560,7 +1561,7 @@ git commit -m "feat: expose persistent agent session api"
 - Consumes: existing SSE parser and Zod schemas.
 - Produces: `AgentStreamEvent.cursor: number`; `readAgentStream(body)` remains an `AsyncIterable<AgentStreamEvent>`.
 
-- [ ] **Step 1: Write failing cursor tests**
+- [x] **Step 1: Write failing cursor tests**
 
 Add to `agentStreamProtocol.test.ts`:
 
@@ -1592,7 +1593,7 @@ it("rejects a missing, non-numeric, or regressing cursor", async () => {
 });
 ```
 
-- [ ] **Step 2: Run focused tests and verify failure**
+- [x] **Step 2: Run focused tests and verify failure**
 
 Run:
 
@@ -1602,7 +1603,7 @@ pnpm vitest run tests/e2e/unit/agent/agentStreamProtocol.test.ts
 
 Expected: FAIL because cursor is not attached.
 
-- [ ] **Step 3: Carry cursor through the reducer**
+- [x] **Step 3: Carry cursor through the reducer**
 
 Change the protocol transition input to include a validated cursor:
 
@@ -1631,7 +1632,7 @@ export type AgentStreamState = {
 
 If `frame.cursor <= state.lastCursor`, return `PROTOCOL_INVALID_METADATA`.
 
-- [ ] **Step 4: Parse SSE ids in the protocol adapter**
+- [x] **Step 4: Parse SSE ids in the protocol adapter**
 
 In `readAgentStream`, parse each SSE message's `id`:
 
@@ -1644,7 +1645,7 @@ if (!Number.isSafeInteger(cursor) || cursor < 1) {
 
 The `[DONE]` sentinel has no semantic cursor and does not change `lastCursor`.
 
-- [ ] **Step 5: Run protocol tests**
+- [x] **Step 5: Run protocol tests**
 
 Run:
 
@@ -1654,7 +1655,7 @@ pnpm vitest run tests/e2e/unit/agent/agentStreamProtocol.test.ts tests/e2e/unit/
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
@@ -1682,7 +1683,7 @@ git commit -m "feat: carry sse cursors through agent protocol"
 - Consumes: HTTP APIs from Task 4 and cursor events from Task 5.
 - Produces: `createApiAgentModel({ baseUrl, fetchImpl })` that no longer imports or delegates to `createFakeAgentModel`; new `AgentModel.resumeRun(input, handlers)`.
 
-- [ ] **Step 1: Extend front-end contracts with failing tests**
+- [x] **Step 1: Extend front-end contracts with failing tests**
 
 Update `apiAgentModel.test.ts` first:
 
@@ -1748,7 +1749,7 @@ it("resumes the active run after the supplied cursor", async () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -1758,7 +1759,7 @@ pnpm vitest run tests/e2e/unit/agent/apiAgentModel.test.ts
 
 Expected: FAIL because the API model still calls `session/create` through the fake model and `resumeRun` is missing.
 
-- [ ] **Step 3: Update contracts**
+- [x] **Step 3: Update contracts**
 
 In `src/models/agentContracts.ts`:
 
@@ -1801,7 +1802,7 @@ resumeRun(
 ): Promise<Result<AgentSendResult>>
 ```
 
-- [ ] **Step 4: Implement typed HTTP transport**
+- [x] **Step 4: Implement typed HTTP transport**
 
 Add to `agentTransport.ts`:
 
@@ -1838,7 +1839,7 @@ Implement matching `listAgentSessions`, `getAgentSession`, `startAgentRun`, `ret
 `${baseUrl}/agent/run/stream?runId=${encodeURIComponent(runId)}&after=${afterSequence}`
 ```
 
-- [ ] **Step 5: Implement the run materializer**
+- [x] **Step 5: Implement the run materializer**
 
 Create `agentRunMaterializer.ts` with one state object:
 
@@ -1853,7 +1854,7 @@ type RunMaterializer = {
 
 It owns only one assistant message and one text part, plus an optional error part. It must never mutate Store directly.
 
-- [ ] **Step 6: Implement `agentRunClient.ts`**
+- [x] **Step 6: Implement `agentRunClient.ts`**
 
 The client owns the reconnect loop and cursor:
 
@@ -1920,7 +1921,7 @@ export async function consumeAgentRun(input: {
 
 No backoff happens for non-retryable protocol errors or not-found errors.
 
-- [ ] **Step 7: Rewrite `apiAgentModel.ts`**
+- [x] **Step 7: Rewrite `apiAgentModel.ts`**
 
 Remove this import:
 
@@ -1932,7 +1933,7 @@ import { createFakeAgentModel } from "@/models/fakeAgentModel";
 
 `cancelRun` calls the server API and does not treat local fetch abort as server cancellation.
 
-- [ ] **Step 8: Run model tests**
+- [x] **Step 8: Run model tests**
 
 Run:
 
@@ -1942,7 +1943,7 @@ pnpm vitest run tests/e2e/unit/agent/apiAgentModel.test.ts tests/e2e/unit/agent/
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 
@@ -1967,7 +1968,7 @@ git commit -m "feat: persist agent model through session api"
 - Consumes: `AgentModel.resumeRun`, `AgentSessionDetail.activeRun.lastSequence`.
 - Produces: `loadSession()` automatically subscribes to a running Run; duplicate subscriptions are suppressed.
 
-- [ ] **Step 1: Write failing Effect resume test**
+- [x] **Step 1: Write failing Effect resume test**
 
 Add to `agentEffect.test.ts`:
 
@@ -2029,7 +2030,7 @@ it("resumes a running session after loading persisted detail", async () => {
 })
 ```
 
-- [ ] **Step 2: Run test and verify no resume call**
+- [x] **Step 2: Run test and verify no resume call**
 
 Run:
 
@@ -2039,7 +2040,7 @@ pnpm vitest run tests/e2e/unit/agent/agentEffect.test.ts
 
 Expected: FAIL because `loadSession` only sets liveRun and never subscribes.
 
-- [ ] **Step 3: Add subscription ownership to Effect**
+- [x] **Step 3: Add subscription ownership to Effect**
 
 Inside `createAgentEffect`:
 
@@ -2078,7 +2079,7 @@ const startRunSubscription = (
 
 Refactor `executeRun` to accept an externally supplied AbortController for resumed runs. Keep store updates identical to normal sends.
 
-- [ ] **Step 4: Call resume after persisted detail is applied**
+- [x] **Step 4: Call resume after persisted detail is applied**
 
 In `loadSession`:
 
@@ -2097,11 +2098,11 @@ if (detail.activeRun?.status === "running") {
 }
 ```
 
-- [ ] **Step 5: Add duplicate-load guard test**
+- [x] **Step 5: Add duplicate-load guard test**
 
 Call `effect.loadSession("session-1")` twice before the first resumed stream completes and assert `resumeRun` is called once.
 
-- [ ] **Step 6: Run Effect and Store tests**
+- [x] **Step 6: Run Effect and Store tests**
 
 Run:
 
@@ -2111,7 +2112,7 @@ pnpm vitest run tests/e2e/unit/agent/agentEffect.test.ts tests/e2e/unit/agent/ag
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
@@ -2134,7 +2135,7 @@ git commit -m "feat: resume active agent runs from zustand effect"
 - Modify: `playwright.config.ts`
 - Modify: `.env.e2e`
 
-- [ ] **Step 1: Add the failing page reload E2E test**
+- [x] **Step 1: Add the failing page reload E2E test**
 
 In `navigation.e2e.ts`:
 
@@ -2154,7 +2155,7 @@ test("agent history survives a direct URL reload", async ({ page }) => {
 })
 ```
 
-- [ ] **Step 2: Add the reconnect E2E test**
+- [x] **Step 2: Add the reconnect E2E test**
 
 Use the fake provider fixture with a delayed second chunk:
 
@@ -2171,7 +2172,7 @@ test("agent continues after a page reload during generation", async ({ page }) =
 })
 ```
 
-- [ ] **Step 3: Run E2E and verify failure**
+- [x] **Step 3: Run E2E and verify failure**
 
 Run:
 
@@ -2181,7 +2182,7 @@ pnpm test:e2e -- tests/e2e/modules/agent/navigation.e2e.ts tests/e2e/modules/age
 
 Expected: FAIL before the persistent test server and delayed provider fixture are wired.
 
-- [ ] **Step 4: Add a deterministic OpenAI-compatible provider**
+- [x] **Step 4: Add a deterministic OpenAI-compatible provider**
 
 Create `scripts/fakeAgentProvider.mjs`:
 
@@ -2243,7 +2244,7 @@ const server = createServer((request, response) => {
 server.listen(port, "127.0.0.1");
 ```
 
-- [ ] **Step 5: Point E2E at the persistent API**
+- [x] **Step 5: Point E2E at the persistent API**
 
 Update `.env.e2e`:
 
@@ -2300,7 +2301,7 @@ export const agentModel: AgentModel =
         : notConfiguredAgentModel;
 ```
 
-- [ ] **Step 6: Run E2E tests**
+- [x] **Step 6: Run E2E tests**
 
 Run:
 
@@ -2310,7 +2311,7 @@ pnpm test:e2e -- tests/e2e/modules/agent/navigation.e2e.ts tests/e2e/modules/age
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
@@ -2333,7 +2334,7 @@ git commit -m "test: cover agent persistence across page reload"
 - Consumes: completed implementation and verification results.
 - Produces: documents that describe current behavior without claiming unsupported multi-instance recovery.
 
-- [ ] **Step 1: Update statuses from Proposed to Accepted or Implemented**
+- [x] **Step 1: Update statuses from Proposed to Accepted or Implemented**
 
 Use:
 
@@ -2345,7 +2346,7 @@ README: Agent sessions persist in local SQLite; reconnect works while the Go pro
 
 Add an implementation record with exact test files and commands.
 
-- [ ] **Step 2: Document the server restart boundary**
+- [x] **Step 2: Document the server restart boundary**
 
 README must state:
 
@@ -2355,7 +2356,7 @@ If the Go process restarts, running Agent runs become interrupted.
 No token origin is fabricated after restart.
 ```
 
-- [ ] **Step 3: Run the complete verification matrix**
+- [x] **Step 3: Run the complete verification matrix**
 
 Run each command separately:
 
@@ -2373,7 +2374,7 @@ git diff --check
 
 Expected: every command exits 0. `gofmt -d` produces no output.
 
-- [ ] **Step 4: Manually verify the real page**
+- [x] **Step 4: Manually verify the real page**
 
 Start a clean Go API on `:3102` and Vite on an unused port with `VITE_API_PROXY_TARGET=http://127.0.0.1:3102`.
 
@@ -2389,7 +2390,7 @@ Verify:
 7. Stop an active Run and observe cancelled status after reload.
 ```
 
-- [ ] **Step 5: Commit documentation**
+- [x] **Step 5: Commit documentation**
 
 Run:
 
@@ -2402,17 +2403,17 @@ git commit -m "docs: record agent persistence implementation"
 
 ## Final Acceptance Checklist
 
-- [ ] New Agent tables exist on an existing SQLite database.
-- [ ] Existing Today data remains readable.
-- [ ] Direct `/agent/:id` refresh loads persisted history.
-- [ ] Running response survives browser subscriber disconnect.
-- [ ] Reconnect uses `after` and does not duplicate text.
-- [ ] Expired cursor returns `AGENT_STREAM_CURSOR_EXPIRED`.
-- [ ] Server restart converts running Runs to interrupted.
-- [ ] Sending the same idempotency request returns the same Run.
-- [ ] Retry preserves old Run history and displays only the active attempt.
-- [ ] Cancel persists partial text and `cancelled`.
-- [ ] Provider failures persist partial text and structured errors.
-- [ ] Zustand remains the only Agent business state source.
-- [ ] No API key reaches client, logs or SQLite.
-- [ ] All tests, type checks, build, Go tests, vet and Playwright pass.
+- [x] New Agent tables exist on an existing SQLite database.
+- [x] Existing Today data remains readable.
+- [x] Direct `/agent/:id` refresh loads persisted history.
+- [x] Running response survives browser subscriber disconnect.
+- [x] Reconnect uses `after` and does not duplicate text.
+- [x] Expired cursor returns `AGENT_STREAM_CURSOR_EXPIRED`.
+- [x] Server restart converts running Runs to interrupted.
+- [x] Sending the same idempotency request reuses the same Run: running returns `AGENT_SESSION_BUSY`, terminal returns `AGENT_REQUEST_ALREADY_PROCESSED`.
+- [x] Retry preserves old Run history and displays only the active attempt.
+- [x] Cancel persists partial text and `cancelled`.
+- [x] Provider failures persist partial text and structured errors.
+- [x] Zustand remains the only Agent business state source.
+- [x] No API key reaches client, logs or SQLite.
+- [x] All tests, type checks, build, Go tests, vet and Playwright pass.

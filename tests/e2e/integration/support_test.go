@@ -62,6 +62,15 @@ func startServerWithDatabase(
 	agentBaseURL string,
 	databasePath string,
 ) *testServer {
+	return startServerWithEnvironment(t, agentBaseURL, databasePath, nil)
+}
+
+func startServerWithEnvironment(
+	t *testing.T,
+	agentBaseURL string,
+	databasePath string,
+	extraEnvironment map[string]string,
+) *testServer {
 	t.Helper()
 	port := freePort(t)
 	command := exec.Command(
@@ -86,6 +95,9 @@ func startServerWithDatabase(
 			"CRAFTINGTABLE_DATABASE_PATH": databasePath,
 			"CRAFTINGTABLE_TEST_HOOKS":    "1",
 		})
+	}
+	for key, value := range extraEnvironment {
+		command.Env = append(command.Env, key+"="+value)
 	}
 	if err := command.Start(); err != nil {
 		t.Fatalf("start server: %v", err)

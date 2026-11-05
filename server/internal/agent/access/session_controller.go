@@ -205,11 +205,17 @@ func validateSendMessage(request sendMessageRequest) ([]string, string) {
 		return nil, "消息参数无效"
 	}
 	parts := make([]string, 0, len(request.Message.Parts))
+	totalRunes := 0
 	for _, part := range request.Message.Parts {
+		partRunes := utf8.RuneCountInString(part.Text)
 		if part.Type != string(domain.PartText) ||
 			strings.TrimSpace(part.Text) == "" ||
-			utf8.RuneCountInString(part.Text) > agentMaxPartRunes {
+			partRunes > agentMaxPartRunes {
 			return nil, "消息正文无效"
+		}
+		totalRunes += partRunes
+		if totalRunes > agentMaxPartRunes {
+			return nil, "消息正文总长度超出限制"
 		}
 		parts = append(parts, part.Text)
 	}
@@ -306,6 +312,19 @@ func writeAgentServiceError(
 		Message:   "Agent 数据保存失败",
 		Retryable: true,
 	}
+	var runState *core.RunStateError
+	if errors.As(err, &runState) {
+		body.Details = map[string]any{
+			"runId":  runState.RunID,
+			"status": runState.Status,
+		}
+	}
+	var requestConflict *core.RequestIDConflictError
+	if errors.As(err, &requestConflict) {
+		body.Details = map[string]any{
+			"clientRequestId": requestConflict.ClientRequestID,
+		}
+	}
 	switch {
 	case errors.Is(err, core.ErrSessionNotFound):
 		status, body.Code, body.Kind, body.Message, body.Retryable =
@@ -319,9 +338,13 @@ func writeAgentServiceError(
 		status, body.Code, body.Kind, body.Message, body.Retryable =
 			http.StatusConflict, "AGENT_SESSION_BUSY", "conflict",
 			"当前会话仍有回复正在生成", false
+	case errors.Is(err, core.ErrRequestAlreadyProcessed):
+		status, body.Code, body.Kind, body.Message, body.Retryable =
+			http.StatusConflict, "AGENT_REQUEST_ALREADY_PROCESSED", "conflict",
+			"该请求已经处理完成", false
 	case errors.Is(err, core.ErrIdempotencyConflict):
 		status, body.Code, body.Kind, body.Message, body.Retryable =
-			http.StatusConflict, "AGENT_IDEMPOTENCY_CONFLICT", "conflict",
+			http.StatusConflict, "AGENT_REQUEST_ID_CONFLICT", "conflict",
 			"相同请求标识对应了不同请求内容", false
 	case errors.Is(err, core.ErrMessageNotRetryable):
 		status, body.Code, body.Kind, body.Message, body.Retryable =

@@ -76,9 +76,12 @@
 - SSE 游标只在单个 Run 内有意义。
 - 客户端游标不能后退。
 - token 增量不是长期数据库事实。
+- durable `RunEvent.sequence` 与内存 Event Journal 的 SSE `id` 是两套序号，不能混用。
 - `running` Run 只能有一个事件 writer。
 - 同一 Session 不能同时运行多个 Run。
 - 终止数据库事务成功后，才能发布成功终止流事件。
+- 完成、取消和超时竞争必须经过同一次终态裁决，只能提交一个终态。
+- 终态写入失败时回退为 `interrupted`，不能留下永久 `running` Run。
 - 进程重启只允许把遗留 Run 收敛为 `interrupted`。
 - API Key 不得进入数据库、日志或客户端。
 
@@ -98,9 +101,28 @@
 
 - Session、Message、Part、Run、Step、RunEvent 和幂等键使用 SQLite 持久化。
 - Run Coordinator 使用独立 Context，浏览器刷新或 HTTP 断线不会取消当前 Run。
-- 前端从 Session 详情中的 `activeRun.lastSequence` 恢复 SSE 订阅。
+- Session 详情使用只读事务生成一致快照，不混合运行中与终态数据。
+- `activeRun.lastSequence` 只反映当前进程内已经注册的 Event Journal；Journal 不存在时返回 `0`，不复用 durable RunEvent 序号。
+- 前端恢复强制校验请求的 `runId`，旧 Run 不会读取同一助手消息后续尝试的内容。
+- 发送和重试按用户消息 ID、`runId` 和 `previousRunId` 收敛恢复路径，不把其他活动 Run 误认为当前请求。
 - Go 进程重启会把遗留 `running` Run 收敛为 `interrupted`，不恢复原 Provider 流。
-- 测试证据位于 `tests/e2e/integration`、`tests/e2e/unit/agent` 和 `tests/e2e/modules/agent`。
+- 完成、取消和超时通过统一终态裁决；等待中的取消会得到最终提交状态，Finalize 失败回退为 `interrupted`。
+- Coordinator 启动失败后的清理使用脱离 HTTP 请求的 Context，并执行有界 Finalize 重试与 Interrupt 兜底。
+- Run 最长 120 秒、空闲 30 秒；SSE 每 15 秒发送注释心跳；Event Journal 上限 8 MiB。
+
+测试证据：
+
+- `tests/e2e/integration/agent_recovery.integration_test.go`
+- `tests/e2e/integration/agent_persistence.integration_test.go`
+- `tests/e2e/integration/agent_idempotency_api.integration_test.go`
+- `tests/e2e/integration/agent_stream_heartbeat.integration_test.go`
+- `tests/e2e/integration/migrations.integration_test.go`
+- `tests/e2e/unit/agent/agentRunClient.test.ts`
+- `tests/e2e/unit/agent/apiAgentModel.test.ts`
+- `tests/e2e/unit/agent/agentEffect.test.ts`
+- `tests/e2e/unit/agent/event_journal_test.go`
+- `tests/e2e/modules/agent/navigation.e2e.ts`
+- `tests/e2e/modules/agent/chat.e2e.ts`
 
 ## Follow-Up Decisions
 

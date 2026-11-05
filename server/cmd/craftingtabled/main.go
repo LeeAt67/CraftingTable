@@ -104,7 +104,17 @@ func run() error {
 	router := httpapi.NewRouter(logger)
 	today.NewController(sqliteStore, logger).Register(router)
 	access.NewSessionController(agentService, logger).Register(router)
-	access.NewRunController(agentService, logger).Register(router)
+	streamHeartbeat, err := resolveAgentStreamHeartbeat()
+	if err != nil {
+		return err
+	}
+	access.NewRunControllerWithOptions(
+		agentService,
+		logger,
+		access.RunControllerOptions{
+			HeartbeatInterval: streamHeartbeat,
+		},
+	).Register(router)
 	if os.Getenv("CRAFTINGTABLE_TEST_HOOKS") == "1" {
 		access.NewTestController(agentService, logger).Register(router)
 	}
@@ -219,6 +229,20 @@ func resolvePort() (int, error) {
 		return 0, fmt.Errorf("API_PORT must be an integer from 0 to 65535")
 	}
 	return port, nil
+}
+
+func resolveAgentStreamHeartbeat() (time.Duration, error) {
+	value := strings.TrimSpace(os.Getenv("CRAFTINGTABLE_AGENT_STREAM_HEARTBEAT"))
+	if value == "" {
+		return 15 * time.Second, nil
+	}
+	interval, err := time.ParseDuration(value)
+	if err != nil || interval <= 0 {
+		return 0, fmt.Errorf(
+			"CRAFTINGTABLE_AGENT_STREAM_HEARTBEAT must be a positive duration",
+		)
+	}
+	return interval, nil
 }
 
 func firstEnvironment(names ...string) string {
