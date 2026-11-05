@@ -31,4 +31,16 @@ describe("AppRouter", () => {
       "page",
     );
   });
+
+  it("opens the documents workspace with its tree sidebar", () => {
+    const router = createMemoryRouter(routes, { initialEntries: ["/docs"] });
+    render(<RouterProvider router={router} />);
+
+    expect(screen.getByRole("complementary", { name: "文档目录" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "文档" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByText("选择或新建一篇文档")).toBeInTheDocument();
+  });
 });
