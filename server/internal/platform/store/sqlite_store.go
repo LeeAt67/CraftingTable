@@ -189,6 +189,25 @@ func applyMigration(
 	return nil
 }
 
+// MigrationContent returns one embedded migration body for upgrade tests.
+func MigrationContent(name string) (string, error) {
+	body, err := migrationFiles.ReadFile("migrations/" + name)
+	if err != nil {
+		return "", fmt.Errorf("read migration %s: %w", name, err)
+	}
+	return string(body), nil
+}
+
+// MigrationChecksum returns the recorded SHA-256 of one embedded migration.
+func MigrationChecksum(name string) (string, error) {
+	body, err := MigrationContent(name)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256([]byte(body))
+	return hex.EncodeToString(sum[:]), nil
+}
+
 // Close 关闭数据库连接。
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()

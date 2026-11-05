@@ -35,6 +35,7 @@ type ContextMessage struct {
 type RunExecution struct {
 	Run             Run
 	AssistantPartID string
+	ReasoningPartID string
 	Messages        []ContextMessage
 	Replayed        bool
 }
@@ -45,6 +46,7 @@ type RunHandle struct {
 	UserMessageID      string    `json:"userMessageId"`
 	AssistantMessageID string    `json:"assistantMessageId"`
 	AssistantPartID    string    `json:"assistantPartId"`
+	ReasoningPartID    string    `json:"reasoningPartId,omitempty"`
 	Status             RunStatus `json:"status"`
 }
 

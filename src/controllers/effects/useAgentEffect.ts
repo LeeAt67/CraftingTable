@@ -208,6 +208,10 @@ export function createAgentEffect(
           assistantMessageId = started.assistantMessageId;
           runId = started.runId;
           abortControllers.set(started.runId, abortController);
+          activeSubscriptions.set(started.runId, {
+            sessionId,
+            controller: abortController,
+          });
           onStarted(started);
           useAgentStore
             .getState()
@@ -281,6 +285,9 @@ export function createAgentEffect(
       return [null, error] as const;
     } finally {
       if (runId) {
+        if (activeSubscriptions.get(runId)?.controller === abortController) {
+          activeSubscriptions.delete(runId);
+        }
         abortControllers.delete(runId);
       }
       const liveRun = useAgentStore.getState().liveRun;

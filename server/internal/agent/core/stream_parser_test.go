@@ -43,6 +43,41 @@ func TestRelayProviderStreamNormalizesDeltasAndDone(t *testing.T) {
 	}
 }
 
+func TestRelayProviderStreamSeparatesReasoningFromContent(t *testing.T) {
+	t.Parallel()
+
+	source := strings.NewReader(
+		"data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"先分析\"}}]}\n\n" +
+			"data: {\"choices\":[{\"delta\":{\"content\":\"最终回答\"}}]}\n\n" +
+			"data: [DONE]\n\n",
+	)
+	events := make([]capturedEvent, 0)
+	err := RelayProviderStream(
+		context.Background(),
+		source,
+		func(name string, payload any) error {
+			events = append(events, capturedEvent{name: name, payload: payload})
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("RelayProviderStream() error = %v", err)
+	}
+	if len(events) != 3 {
+		t.Fatalf("event count = %d, want 3", len(events))
+	}
+	if events[0].name != "reasoning" {
+		t.Fatalf("first event = %q, want reasoning", events[0].name)
+	}
+	if values, ok := events[0].payload.(map[string]string); !ok ||
+		values["text"] != "先分析" {
+		t.Fatalf("reasoning payload = %#v", events[0].payload)
+	}
+	if events[1].name != "delta" {
+		t.Fatalf("second event = %q, want delta", events[1].name)
+	}
+}
+
 func TestRelayProviderStreamAcceptsFinalEventWithoutBlankLine(t *testing.T) {
 	t.Parallel()
 

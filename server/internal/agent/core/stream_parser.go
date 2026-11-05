@@ -24,7 +24,8 @@ type EventSink func(event string, payload any) error
 type upstreamEvent struct {
 	Choices []struct {
 		Delta struct {
-			Content string `json:"content"`
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
@@ -118,6 +119,13 @@ func processData(
 	}
 
 	choice := event.Choices[0]
+	if choice.Delta.ReasoningContent != "" {
+		if err := sink("reasoning", map[string]string{
+			"text": choice.Delta.ReasoningContent,
+		}); err != nil {
+			return false, err
+		}
+	}
 	if choice.Delta.Content != "" {
 		if err := sink("delta", map[string]string{
 			"text": choice.Delta.Content,

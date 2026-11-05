@@ -322,4 +322,56 @@ describe("FakeAgentModel", () => {
         .map((part) => part.content.text),
     ).toEqual(["重试成功"]);
   });
+
+  it("streams reasoning before text when reasoning chunks are configured", async () => {
+    const model = createFakeAgentModel({
+      chunkDelayMs: 0,
+      reasoningChunks: async function* () {
+        yield "先分析";
+      },
+    });
+    const [created] = await model.createSession({ clientRequestId: "create-1" });
+    const parts: string[] = [];
+
+    const [result, error] = await model.sendMessage(
+      {
+        sessionId: created!.session.id,
+        clientRequestId: "send-1",
+        message: {
+          id: "user-message-1",
+          role: "user",
+          parts: [{ type: "text", text: "解释一下" }],
+        },
+        signal: new AbortController().signal,
+      },
+      {
+        onStarted: () => undefined,
+        onSnapshot: (snapshot) => {
+          parts.push(
+            snapshot.parts
+              .map((part) =>
+                part.type === "reasoning" || part.type === "text"
+                  ? `${part.type}:${part.content.text}`
+                  : part.type,
+              )
+              .join("|"),
+          );
+        },
+      },
+    );
+
+    expect(error).toBeNull();
+    expect(result?.status).toBe("completed");
+    expect(parts.some((value) => value.includes("reasoning:先分析"))).toBe(true);
+
+    const [detail] = await model.getSession(created!.session.id);
+    const assistant = detail!.messages.at(-1)!;
+    const assistantParts = detail!.messageParts.filter(
+      (part) => part.messageId === assistant.id,
+    );
+    expect(assistantParts.map((part) => part.type)).toEqual([
+      "reasoning",
+      "text",
+    ]);
+  });
 });

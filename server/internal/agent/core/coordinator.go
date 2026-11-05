@@ -20,6 +20,7 @@ const runJournalLimit = 8 * 1024 * 1024
 
 type RunSnapshot struct {
 	Text         string
+	Reasoning    string
 	LastSequence int
 	Status       domain.RunStatus
 }
@@ -29,6 +30,7 @@ type activeRun struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	journal         *EventJournal
+	stream          *runStream
 	terminalMu      sync.Mutex
 	cancelRequested bool
 	finishClaimed   bool
@@ -103,6 +105,7 @@ func (c *Coordinator) Snapshot(runID string) (RunSnapshot, bool) {
 	journal := active.journal.Snapshot()
 	return RunSnapshot{
 		Text:         journal.Text,
+		Reasoning:    journal.Reasoning,
 		LastSequence: journal.LastSequence,
 		Status:       domain.RunRunning,
 	}, true
@@ -165,10 +168,102 @@ func (c *Coordinator) Recover(ctx context.Context) error {
 	return err
 }
 
+type runStream struct {
+	active           *activeRun
+	execution        domain.RunExecution
+	reasoningStarted bool
+	reasoningEnded   bool
+	textStarted      bool
+	textEnded        bool
+}
+
+func newRunStream(
+	active *activeRun,
+	execution domain.RunExecution,
+) *runStream {
+	return &runStream{active: active, execution: execution}
+}
+
+func (s *runStream) chunk(kind StreamChunkKind, partID string) StreamChunk {
+	return StreamChunk{
+		Kind:               kind,
+		RunID:              s.execution.Run.ID,
+		SessionID:          s.execution.Run.SessionID,
+		UserMessageID:      s.execution.Run.UserMessageID,
+		AssistantMessageID: s.execution.Run.AssistantMessageID,
+		PartID:             partID,
+	}
+}
+
+func (s *runStream) reasoning(text string) error {
+	if s.execution.ReasoningPartID == "" || text == "" {
+		return nil
+	}
+	if !s.reasoningStarted {
+		if err := s.active.journal.Append(s.chunk(
+			StreamReasoningStart,
+			s.execution.ReasoningPartID,
+		)); err != nil {
+			return err
+		}
+		s.reasoningStarted = true
+	}
+	delta := s.chunk(StreamReasoningDelta, s.execution.ReasoningPartID)
+	delta.Text = text
+	return s.active.journal.Append(delta)
+}
+
+func (s *runStream) endReasoning() error {
+	if !s.reasoningStarted || s.reasoningEnded {
+		return nil
+	}
+	s.reasoningEnded = true
+	return s.active.journal.Append(s.chunk(
+		StreamReasoningEnd,
+		s.execution.ReasoningPartID,
+	))
+}
+
+func (s *runStream) text(text string) error {
+	if text == "" {
+		return nil
+	}
+	if err := s.endReasoning(); err != nil {
+		return err
+	}
+	if !s.textStarted {
+		if err := s.active.journal.Append(s.chunk(
+			StreamTextStart,
+			s.execution.AssistantPartID,
+		)); err != nil {
+			return err
+		}
+		s.textStarted = true
+	}
+	delta := s.chunk(StreamTextDelta, s.execution.AssistantPartID)
+	delta.Text = text
+	return s.active.journal.Append(delta)
+}
+
+func (s *runStream) close() error {
+	if err := s.endReasoning(); err != nil {
+		return err
+	}
+	if !s.textStarted || s.textEnded {
+		return nil
+	}
+	s.textEnded = true
+	return s.active.journal.Append(s.chunk(
+		StreamTextEnd,
+		s.execution.AssistantPartID,
+	))
+}
+
 func (c *Coordinator) execute(active *activeRun) {
 	defer close(active.done)
 	defer c.stopRun(active)
 	execution := active.execution
+	active.stream = newRunStream(active, execution)
 	for _, chunk := range []StreamChunk{
 		{
 			Kind:               StreamStart,
@@ -180,12 +275,6 @@ func (c *Coordinator) execute(active *activeRun) {
 		},
 		{
 			Kind:               StreamStartStep,
-			RunID:              execution.Run.ID,
-			AssistantMessageID: execution.Run.AssistantMessageID,
-			PartID:             execution.AssistantPartID,
-		},
-		{
-			Kind:               StreamTextStart,
 			RunID:              execution.Run.ID,
 			AssistantMessageID: execution.Run.AssistantMessageID,
 			PartID:             execution.AssistantPartID,
@@ -212,22 +301,18 @@ func (c *Coordinator) execute(active *activeRun) {
 		active.ctx,
 		body,
 		func(event string, payload any) error {
-			if event != "delta" {
-				return nil
-			}
 			values, ok := payload.(map[string]string)
 			if !ok {
 				return ErrInvalidEvent
 			}
-			return active.journal.Append(StreamChunk{
-				Kind:               StreamTextDelta,
-				RunID:              execution.Run.ID,
-				SessionID:          execution.Run.SessionID,
-				UserMessageID:      execution.Run.UserMessageID,
-				AssistantMessageID: execution.Run.AssistantMessageID,
-				PartID:             execution.AssistantPartID,
-				Text:               values["text"],
-			})
+			switch event {
+			case "reasoning":
+				return active.stream.reasoning(values["text"])
+			case "delta":
+				return active.stream.text(values["text"])
+			default:
+				return nil
+			}
 		},
 		active.touch,
 	)
@@ -255,14 +340,16 @@ func (c *Coordinator) finishSuccess(active *activeRun) {
 
 func (c *Coordinator) finishCompleted(active *activeRun) {
 	execution := active.execution
-	text := active.journal.Snapshot().Text
+	snapshot := active.journal.Snapshot()
 	err := c.finalize(
 		active,
 		FinalizeRunRecord{
 			RunID:             execution.Run.ID,
 			Status:            domain.RunCompleted,
 			AssistantPartID:   execution.AssistantPartID,
-			AssistantText:     text,
+			AssistantText:     snapshot.Text,
+			ReasoningPartID:   execution.ReasoningPartID,
+			ReasoningText:     snapshot.Reasoning,
 			MessageStatus:     domain.MessageComplete,
 			PartStatus:        domain.PartComplete,
 			TerminalEventType: "run.completed",
@@ -279,14 +366,16 @@ func (c *Coordinator) finishCompleted(active *activeRun) {
 
 func (c *Coordinator) finishCancelled(active *activeRun) {
 	execution := active.execution
-	text := active.journal.Snapshot().Text
+	snapshot := active.journal.Snapshot()
 	err := c.finalize(
 		active,
 		FinalizeRunRecord{
 			RunID:             execution.Run.ID,
 			Status:            domain.RunCancelled,
 			AssistantPartID:   execution.AssistantPartID,
-			AssistantText:     text,
+			AssistantText:     snapshot.Text,
+			ReasoningPartID:   execution.ReasoningPartID,
+			ReasoningText:     snapshot.Reasoning,
 			MessageStatus:     domain.MessageCancelled,
 			PartStatus:        domain.PartCancelled,
 			TerminalEventType: "run.cancelled",
@@ -303,14 +392,16 @@ func (c *Coordinator) finishCancelled(active *activeRun) {
 
 func (c *Coordinator) finishFailure(active *activeRun, agentError domain.Error) {
 	execution := active.execution
-	text := active.journal.Snapshot().Text
+	snapshot := active.journal.Snapshot()
 	err := c.finalize(
 		active,
 		FinalizeRunRecord{
 			RunID:             execution.Run.ID,
 			Status:            domain.RunFailed,
 			AssistantPartID:   execution.AssistantPartID,
-			AssistantText:     text,
+			AssistantText:     snapshot.Text,
+			ReasoningPartID:   execution.ReasoningPartID,
+			ReasoningText:     snapshot.Reasoning,
 			MessageStatus:     domain.MessageFailed,
 			PartStatus:        domain.PartFailed,
 			AgentError:        &agentError,
@@ -329,6 +420,7 @@ func (c *Coordinator) finishFailure(active *activeRun, agentError domain.Error) 
 func (c *Coordinator) finishInterrupted(active *activeRun) {
 	active.fallbackInterrupted()
 	execution := active.execution
+	snapshot := active.journal.Snapshot()
 	agentError := domain.NewError(
 		"AGENT_FINALIZE_FAILED",
 		"server",
@@ -341,7 +433,9 @@ func (c *Coordinator) finishInterrupted(active *activeRun) {
 		InterruptRunRecord{
 			RunID:           execution.Run.ID,
 			AssistantPartID: execution.AssistantPartID,
-			AssistantText:   active.journal.Snapshot().Text,
+			AssistantText:   snapshot.Text,
+			ReasoningPartID: execution.ReasoningPartID,
+			ReasoningText:   snapshot.Reasoning,
 			AgentError:      agentError,
 		},
 	)
@@ -366,15 +460,9 @@ func (c *Coordinator) appendTerminal(
 	agentError *domain.Error,
 ) {
 	execution := active.execution
-	_ = active.journal.Append(StreamChunk{
-		Kind:               StreamTextEnd,
-		RunID:              execution.Run.ID,
-		SessionID:          execution.Run.SessionID,
-		UserMessageID:      execution.Run.UserMessageID,
-		AssistantMessageID: execution.Run.AssistantMessageID,
-		PartID:             execution.AssistantPartID,
-		Status:             status,
-	})
+	if active.stream != nil {
+		_ = active.stream.close()
+	}
 	if status == domain.RunFailed {
 		_ = active.journal.Append(StreamChunk{
 			Kind:               StreamError,

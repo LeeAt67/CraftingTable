@@ -141,6 +141,87 @@ describe("AgentEffect", () => {
     await sending;
   });
 
+  it("does not resume a fresh run that is still subscribed", async () => {
+    let finishSend:
+      | ((
+          result: Awaited<ReturnType<AgentModel["sendMessage"]>>,
+        ) => void)
+      | undefined;
+    const resumeRun = vi.fn();
+    const detail = {
+      session: {
+        id: "session-1",
+        title: "进行中的会话",
+        createdAt: "2026-11-05T00:00:00Z",
+        updatedAt: "2026-11-05T00:00:01Z",
+      },
+      messages: [
+        {
+          id: "assistant-1",
+          sessionId: "session-1",
+          seq: 2,
+          role: "assistant" as const,
+          status: "streaming" as const,
+          activeRunId: "run-1",
+          userMessageId: "user-1",
+          createdAt: "2026-11-05T00:00:00Z",
+          updatedAt: "2026-11-05T00:00:01Z",
+        },
+      ],
+      messageParts: [],
+      activeRun: {
+        runId: "run-1",
+        status: "running" as const,
+        lastSequence: 2,
+      },
+      nextMessageCursor: null,
+    };
+    const model: AgentModel = {
+      ...createFakeAgentModel({ chunkDelayMs: 0 }),
+      createSession: async () => [
+        {
+          session: detail.session,
+        },
+        null,
+      ],
+      getSession: async () => [detail, null],
+      sendMessage: async (_input, handlers) =>
+        new Promise((resolve) => {
+          handlers.onStarted({
+            assistantMessageId: "assistant-1",
+            runId: "run-1",
+            status: "running",
+          });
+          finishSend = resolve;
+        }),
+      resumeRun,
+    };
+    const effect = createAgentEffect(model, { success: () => undefined });
+
+    const [created] = await effect.createSession();
+    useAgentStore.getState().setActiveSession(created!.session.id);
+    const sending = effect.sendMessage("保持原订阅");
+    await waitFor(() => {
+      expect(useAgentStore.getState().liveRun).toEqual({
+        sessionId: "session-1",
+        runId: "run-1",
+      });
+    });
+
+    await effect.loadSession("session-1");
+
+    expect(resumeRun).not.toHaveBeenCalled();
+    finishSend?.([
+      {
+        assistantMessageId: "assistant-1",
+        runId: "run-1",
+        status: "completed",
+      },
+      null,
+    ]);
+    await sending;
+  });
+
   it("does not let a stale session response replace the latest selection", async () => {
     const base = createFakeAgentModel({ chunkDelayMs: 0 });
     const [sessionA] = await base.createSession({ clientRequestId: "a" });

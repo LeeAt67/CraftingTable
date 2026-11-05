@@ -4,12 +4,15 @@ import type {
   AgentMessagePart,
   AgentMessageSnapshot,
   AgentMessageStatus,
+  AgentReasoningPart,
   AgentRunHandle,
   AgentRunStatus,
 } from "@/models/agentContracts";
 
 export type RunMaterializer = {
   start: (handle: AgentRunHandle, timestamp: string) => AgentMessageSnapshot;
+  reasoningStart: () => AgentMessageSnapshot;
+  reasoningDelta: (text: string, cursor: number) => AgentMessageSnapshot;
   delta: (text: string, cursor: number) => AgentMessageSnapshot;
   finish: (status: AgentRunStatus, timestamp: string) => AgentMessageSnapshot;
   error: (error: AgentError, timestamp: string) => AgentMessageSnapshot;
@@ -21,6 +24,7 @@ type MaterializerInput = {
   userMessageId: string;
   assistantMessageId: string;
   assistantPartId: string;
+  reasoningPartId?: string;
   initialSnapshot?: AgentMessageSnapshot;
 };
 
@@ -44,7 +48,16 @@ function clonePart(part: AgentMessagePart): AgentMessagePart {
       },
     };
   }
-  return { ...part, content: { ...part.content } };
+  if (part.type === "reasoning") {
+    return {
+      ...part,
+      content: { type: "reasoning", text: part.content.text },
+    };
+  }
+  return {
+    ...part,
+    content: { type: "text", text: part.content.text },
+  };
 }
 
 function cloneSnapshot(snapshot: AgentMessageSnapshot): AgentMessageSnapshot {
@@ -74,6 +87,9 @@ export function createAgentRunMaterializer(
   const initialParts = input.initialSnapshot?.parts
     .filter((part) => !part.runId || part.runId === input.runId)
     .map(clonePart);
+  let reasoningPart = initialParts?.find(
+    (part): part is AgentReasoningPart => part.type === "reasoning",
+  );
   let textPart = initialParts?.find(
     (part): part is Extract<AgentMessagePart, { type: "text" }> =>
       part.type === "text",
@@ -88,7 +104,7 @@ export function createAgentRunMaterializer(
       id: input.assistantPartId,
       messageId: input.assistantMessageId,
       runId: input.runId,
-      index: 0,
+      index: reasoningPart || input.reasoningPartId ? 1 : 0,
       type: "text",
       status: "streaming",
       content: { type: "text", text: "" },
@@ -99,7 +115,11 @@ export function createAgentRunMaterializer(
 
   const snapshot = (): AgentMessageSnapshot => ({
     message: { ...message },
-    parts: [clonePart(textPart!), ...(errorPart ? [clonePart(errorPart)] : [])],
+    parts: [
+      ...(reasoningPart ? [clonePart(reasoningPart)] : []),
+      clonePart(textPart!),
+      ...(errorPart ? [clonePart(errorPart)] : []),
+    ],
   });
 
   const setTerminalStatus = (
@@ -113,6 +133,9 @@ export function createAgentRunMaterializer(
       updatedAt,
     };
     textPart = { ...textPart!, status: terminalStatus, updatedAt };
+    if (reasoningPart) {
+      reasoningPart = { ...reasoningPart, status: terminalStatus, updatedAt };
+    }
     if (errorPart) {
       errorPart = {
         ...errorPart,
@@ -135,11 +158,12 @@ export function createAgentRunMaterializer(
         createdAt: message.createdAt,
         updatedAt: startedAt,
       };
+      reasoningPart = undefined;
       textPart = {
         id: handle.assistantPartId,
         messageId: handle.assistantMessageId,
         runId: handle.runId,
-        index: 0,
+        index: input.reasoningPartId ? 1 : 0,
         type: "text",
         status: "streaming",
         content: { type: "text", text: "" },
@@ -147,6 +171,44 @@ export function createAgentRunMaterializer(
         updatedAt: startedAt,
       };
       errorPart = undefined;
+      return snapshot();
+    },
+
+    reasoningStart() {
+      if (reasoningPart || !input.reasoningPartId) {
+        return snapshot();
+      }
+      const updatedAt = new Date().toISOString();
+      reasoningPart = {
+        id: input.reasoningPartId,
+        messageId: input.assistantMessageId,
+        runId: input.runId,
+        index: 0,
+        type: "reasoning",
+        status: "streaming",
+        content: { type: "reasoning", text: "" },
+        createdAt: updatedAt,
+        updatedAt,
+      };
+      textPart = { ...textPart!, index: 1, updatedAt };
+      message = { ...message, status: "streaming", updatedAt };
+      return snapshot();
+    },
+
+    reasoningDelta(text, _cursor) {
+      if (!reasoningPart) {
+        return snapshot();
+      }
+      const updatedAt = new Date().toISOString();
+      reasoningPart = {
+        ...reasoningPart,
+        content: {
+          type: "reasoning",
+          text: reasoningPart.content.text + text,
+        },
+        updatedAt,
+      };
+      message = { ...message, status: "streaming", updatedAt };
       return snapshot();
     },
 

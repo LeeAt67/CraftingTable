@@ -72,11 +72,16 @@ func (s *Service) GetSession(
 	detail.ActiveRun.LastSequence = snapshot.LastSequence
 	for index := range detail.MessageParts {
 		part := &detail.MessageParts[index]
-		if part.MessageID == detail.ActiveRun.AssistantMessageID &&
-			part.RunID != nil &&
-			*part.RunID == detail.ActiveRun.RunID &&
-			part.Type == domain.PartText {
+		if part.MessageID != detail.ActiveRun.AssistantMessageID ||
+			part.RunID == nil ||
+			*part.RunID != detail.ActiveRun.RunID {
+			continue
+		}
+		switch part.Type {
+		case domain.PartText:
 			part.Text = snapshot.Text
+		case domain.PartReasoning:
+			part.Text = snapshot.Reasoning
 		}
 	}
 	return detail, nil
@@ -170,6 +175,7 @@ func handleFromExecution(execution domain.RunExecution) domain.RunHandle {
 		UserMessageID:      execution.Run.UserMessageID,
 		AssistantMessageID: execution.Run.AssistantMessageID,
 		AssistantPartID:    execution.AssistantPartID,
+		ReasoningPartID:    execution.ReasoningPartID,
 		Status:             execution.Run.Status,
 	}
 }
