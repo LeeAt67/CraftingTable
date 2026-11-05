@@ -52,7 +52,7 @@ export function AgentComposer({
       onSubmit={handleSubmit}
       className="mx-auto w-full max-w-[760px] px-3 pb-3 pt-2 min-[768px]:px-5 min-[768px]:pb-5"
     >
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_8px_28px_rgba(15,23,42,0.07)] transition-[border-color,box-shadow] focus-within:border-brand/60 focus-within:shadow-[0_8px_28px_rgba(15,23,42,0.08),0_0_0_1px_var(--brand)] dark:shadow-[0_10px_32px_rgba(0,0,0,0.22)]">
+      <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_8px_28px_rgba(15,23,42,0.07)] transition-[border-color,box-shadow] focus-within:border-brand focus-within:shadow-[0_8px_28px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_32px_rgba(0,0,0,0.22)]">
         <Textarea
           value={text}
           aria-label="发送给 Agent"
@@ -62,7 +62,7 @@ export function AgentComposer({
           onKeyDown={handleKeyDown}
           onCompositionStart={() => setIsComposing(true)}
           onCompositionEnd={() => setIsComposing(false)}
-          className="min-h-[86px] resize-none border-0 bg-transparent px-3.5 py-3 text-sm leading-6 shadow-none focus-visible:ring-0"
+          className="min-h-[86px] resize-none border-0 bg-transparent px-3.5 py-3 text-sm leading-6 shadow-none focus-visible:outline-none focus-visible:ring-0"
         />
         <div className="flex items-center justify-between gap-3 px-2.5 pb-2.5">
           <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] text-textSecondary">
@@ -94,9 +94,6 @@ export function AgentComposer({
           </Button>
         </div>
       </div>
-      <p className="mt-2 px-2 text-[10.5px] text-textSecondary">
-        Enter 发送 · Shift + Enter 换行
-      </p>
     </form>
   );
 }
