@@ -83,11 +83,28 @@ export function createDocsEffect(
     return saveSequence;
   };
 
+  const flushPendingTitle = () => {
+    if (titleTimer) {
+      clearTimeout(titleTimer);
+      titleTimer = null;
+    }
+    const target = pendingTitle;
+    pendingTitle = null;
+    if (!target) {
+      return;
+    }
+    void model
+      .renameNode({ id: target.id, title: target.title })
+      .then((summary) => useDocsStore.getState().replaceSummary(summary))
+      .catch((error) => notify.error(messageOf(error)));
+  };
+
   const flushSave = async () => {
     if (contentTimer) {
       clearTimeout(contentTimer);
       contentTimer = null;
     }
+    flushPendingTitle();
     const target = pendingSave;
     pendingSave = null;
     if (target) {
@@ -98,19 +115,9 @@ export function createDocsEffect(
   };
 
   const flushTitleIfPending = (id: string) => {
-    if (!pendingTitle || pendingTitle.id !== id) {
-      return;
+    if (pendingTitle?.id === id) {
+      flushPendingTitle();
     }
-    if (titleTimer) {
-      clearTimeout(titleTimer);
-      titleTimer = null;
-    }
-    const target = pendingTitle;
-    pendingTitle = null;
-    void model
-      .renameNode({ id: target.id, title: target.title })
-      .then((summary) => useDocsStore.getState().replaceSummary(summary))
-      .catch((error) => notify.error(messageOf(error)));
   };
 
   const applyContentChange = (id: string, content: string) => {
@@ -164,11 +171,17 @@ export function createDocsEffect(
     }
   };
 
-  const renameNode = async (id: string, title: string) => {
+  const renameNode = async (
+    id: string,
+    title: string,
+    options: { silent?: boolean } = {},
+  ) => {
     try {
       const summary = await model.renameNode({ id, title });
       useDocsStore.getState().replaceSummary(summary);
-      notify.success("已重命名");
+      if (!options.silent) {
+        notify.success("已重命名");
+      }
       return summary;
     } catch (error) {
       notify.error(messageOf(error));

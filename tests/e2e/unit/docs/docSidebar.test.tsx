@@ -154,6 +154,45 @@ describe("DocSidebar", () => {
     expect(screen.queryByText("接口设计")).not.toBeInTheDocument();
   });
 
+  it("shows an inline error with retry when the search request fails", async () => {
+    useDocsStore.getState().setTree([folder, document]);
+    vi.mocked(docsModel.search)
+      .mockRejectedValueOnce(new Error("网络异常"))
+      .mockResolvedValueOnce({ items: [searchHit], nextCursor: null });
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DocSidebar />
+      </MemoryRouter>,
+    );
+
+    await user.type(screen.getByLabelText("搜索文档"), "接口");
+
+    await waitFor(
+      () => {
+        expect(screen.getByRole("alert")).toHaveTextContent("搜索失败");
+      },
+      { timeout: 1500 },
+    );
+
+    const callsBeforeRetry = vi.mocked(docsModel.search).mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "重试" }));
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("接口设计")).toBeInTheDocument();
+      },
+      { timeout: 1500 },
+    );
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(vi.mocked(docsModel.search).mock.calls.length).toBe(
+      callsBeforeRetry + 1,
+    );
+    expect(docsModel.search).toHaveBeenLastCalledWith({ q: "接口", limit: 20 });
+  });
+
   it("offers rename, move and delete from the row action menu", async () => {
     useDocsStore.getState().setTree([folder, document]);
     const user = userEvent.setup();

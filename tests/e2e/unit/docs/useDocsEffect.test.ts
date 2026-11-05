@@ -156,6 +156,23 @@ describe("docsEffect", () => {
     });
   });
 
+  it("flushes a pending title when saving immediately", async () => {
+    const model = createModel();
+    const effect = createDocsEffect(model, notify);
+    useDocsStore.getState().setActiveNode(document);
+
+    effect.applyTitleChange("doc-1", "新标题");
+    await effect.flushSave();
+
+    expect(model.renameNode).toHaveBeenCalledWith({
+      id: "doc-1",
+      title: "新标题",
+    });
+
+    await vi.advanceTimersByTimeAsync(600);
+    expect(model.renameNode).toHaveBeenCalledTimes(1);
+  });
+
   it("serializes content saves for the same document", async () => {
     const resolvers: Array<() => void> = [];
     const saveContent = vi.fn(

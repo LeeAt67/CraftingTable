@@ -6,6 +6,7 @@ import { DocsWorkspaceLayout } from "@/layouts/docsWorkspaceLayout";
 import { TodayWorkspaceLayout } from "@/layouts/todayWorkspaceLayout";
 import AgentPage from "@/pages/agent";
 import DocsEmptyPage from "@/pages/docs";
+import DocPage from "@/pages/docs/docPage";
 import SettingsPage from "@/pages/settings";
 import TodayPage from "@/pages/today";
 
@@ -30,7 +31,7 @@ export const routes: RouteObject[] = [
         element: <DocsWorkspaceLayout />,
         children: [
           { index: true, element: <DocsEmptyPage /> },
-          { path: ":nodeId", element: <DocsEmptyPage /> },
+          { path: ":nodeId", element: <DocPage /> },
         ],
       },
       { path: "/settings", element: <SettingsPage /> },

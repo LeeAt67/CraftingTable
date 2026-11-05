@@ -25,6 +25,7 @@ export function DocSidebar() {
   const nodes = useDocsStore((state) => state.nodes);
   const searchQuery = useDocsStore((state) => state.searchQuery);
   const searchResults = useDocsStore((state) => state.searchResults);
+  const searchPhase = useDocsStore((state) => state.searchPhase);
   const [dialog, setDialog] = useState<DocDialogState>({ type: "none" });
 
   useEffect(() => {
@@ -96,6 +97,21 @@ export function DocSidebar() {
       <nav aria-label="文档树" className="mt-4 min-h-0 flex-1 overflow-y-auto">
         {filtering ? (
           <ul className="space-y-0.5" aria-label="搜索结果">
+            {searchPhase === "error" && (
+              <li
+                role="alert"
+                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5"
+              >
+                <span className="text-xs text-destructive">搜索失败</span>
+                <button
+                  type="button"
+                  onClick={() => effect.search(searchQuery)}
+                  className="rounded px-1 text-xs text-brand underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                >
+                  重试
+                </button>
+              </li>
+            )}
             {searchResults.map((hit) => (
               <li key={hit.id}>
                 <button
@@ -114,7 +130,7 @@ export function DocSidebar() {
                 </button>
               </li>
             ))}
-            {searchResults.length === 0 && (
+            {searchResults.length === 0 && searchPhase !== "error" && (
               <li className="px-2 py-2 text-xs text-textSecondary">
                 没有匹配的文档
               </li>
