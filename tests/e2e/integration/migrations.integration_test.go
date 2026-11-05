@@ -47,7 +47,11 @@ func TestSQLiteMigrationsAreRecordedAndChecksumGuarded(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"001_initial.sql", "002_agent.sql"} {
+	for _, name := range []string{
+		"001_initial.sql",
+		"002_agent.sql",
+		"003_agent_reasoning.sql",
+	} {
 		if len(applied[name]) != 64 {
 			t.Fatalf("migration %s checksum = %q", name, applied[name])
 		}

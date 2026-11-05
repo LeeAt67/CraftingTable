@@ -67,6 +67,8 @@ type FinalizeRunRecord struct {
 	Status             domain.RunStatus
 	AssistantPartID    string
 	AssistantText      string
+	ReasoningPartID    string
+	ReasoningText      string
 	MessageStatus      domain.MessageStatus
 	PartStatus         domain.PartStatus
 	AgentError         *domain.Error
@@ -78,6 +80,8 @@ type InterruptRunRecord struct {
 	RunID           string
 	AssistantPartID string
 	AssistantText   string
+	ReasoningPartID string
+	ReasoningText   string
 	AgentError      domain.Error
 }
 
