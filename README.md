@@ -30,6 +30,7 @@ Agent 在开发模式通过 Go 服务端的 `/api/v1/agent/stream` 连接 OpenAI
 - 前端：React、TypeScript、Vite、ShadcnUI、Zustand、MVC。
 - 后端：Go 1.26 模块化单体，标准库 `net/http`，Desktop 使用 SQLite，Web 存储和横向扩展方案在进入 Web 实施前通过架构决策记录确定。
 - Agent：单 Agent 起步，预留工具、Skills、MCP、多 Agent 和评测扩展点。
+- 架构采用策略：目标架构完整采用，系统能力渐进落地；规范不因 MVP 缩水，也不提前复制外部项目的全部技术栈和进程拓扑。
 - 前端 Model 边界返回 `Result<T>`，Zustand 是业务状态唯一事实源。
 - 产品行为、API、契约和桌面验收测试统一位于 `tests/e2e`。
 - Web 身份、多端同步、多实例租约、可恢复流和 Redis 职责必须在对应架构决策门完成后才能进入生产实现。
