@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stream MiMo `reasoning_content` into its own persisted MessagePart, recover it after reload, and show it above the answer in a collapsible "思考中..." panel.
+**Goal:** Stream MiMo `reasoning_content` into its own persisted MessagePart, recover it after reload, and show it above the answer in a collapsible `Reasoning` panel.
 
 **Architecture:** The Provider Parser turns `delta.reasoning_content` into a `reasoning` event; the Run Coordinator emits `reasoning-start`/`reasoning-delta`/`reasoning-end` chunks before `text-start`; the Event Journal keeps reasoning and text in separate buffers; Finalize writes both Parts in one transaction and deletes an empty reasoning Part. React maps the new stream events onto a `reasoning` Part through the existing Materializer and renders it above the text Part.
 
@@ -17,8 +17,12 @@
 - `text-delta` and `reasoning-delta` are never written to SQLite per token; only Finalize/Interrupt persist content.
 - A Run that produces no reasoning must not create a visible empty panel; its reasoning Part is deleted at Finalize.
 - Reasoning status always mirrors the assistant Message terminal status.
-- The UI title is exactly `思考中...`; no Brain icon and no Markdown rendering.
-- Reasoning is collapsed after reload; expanded while reasoning streams; auto-collapsed on the first text token; a manual toggle wins over the automatic rule.
+- The UI title is exactly `Reasoning`; no Brain icon, timer, duration, token, usage or Markdown rendering.
+- Reasoning has no metadata field and no `reasoning-metadata` stream event.
+- Reasoning is collapsed after reload; expanded while reasoning streams; auto-collapsed when the first non-empty text fragment appears; a manual toggle wins over the automatic rule.
+- `finish_reason` and `[DONE]` parser behavior stays unchanged; this feature does not parse usage.
+- The outer message list follows new content only when the user was near the bottom before the update.
+- The reasoning content area follows new content only when the user was near its bottom before the update.
 - Do not log reasoning bodies. Logs may contain Part IDs, chars and error kinds only.
 - The legacy `/api/v1/agent/stream` endpoint keeps ignoring reasoning events; only the persistent pipeline changes.
 - All new front-end and integration tests live under `tests/e2e`; Go in-package parser tests extend the existing `server/internal/agent/core/stream_parser_test.go`.
@@ -54,16 +58,16 @@ server/internal/platform/store/
 src/models/
   agentContracts.ts        AgentReasoningPart contract
   agentStreamSchema.ts     reasoning-* chunk schema and events
-  agentStreamReducer.ts    reasoning-delta event mapping
+  agentStreamReducer.ts    reasoning-start/delta event mapping
   agentRunMaterializer.ts  Separate reasoningPart and textPart
-  agentRunClient.ts        Handles reasoning-delta events
+  agentRunClient.ts        Handles reasoning-start/delta events
   agentTransport.ts        Optional reasoningPartId in RunHandle
   apiAgentModel.ts         Passes reasoningPartId into the Materializer
   fakeAgentModel.ts        Optional reasoning stream for unit tests
 
 src/components/agent/
   agentReasoningPanel.tsx  Collapsible reasoning panel
-  agentMessageList.tsx     Panel above text, thinking announcement
+  agentMessageList.tsx     Panel above text, announcement and outer scroll ownership
 
 tests/e2e/
   integration/agent_reasoning*.go     Persistence, stream order, recovery
@@ -1866,7 +1870,7 @@ git commit -m "test(agent): cover reasoning recovery from the run journal"
 
 **Interfaces:**
 - Consumes: server UI stream parts `reasoning-start`, `reasoning-delta`, `reasoning-end`.
-- Produces: `AgentReasoningPart`, `AgentReasoningPartContent`, `AgentRunHandle.reasoningPartId`, `AgentStreamEvent` variant `{ type: "reasoning-delta"; id; delta; cursor }`.
+- Produces: `AgentReasoningPart`, `AgentReasoningPartContent`, `AgentRunHandle.reasoningPartId`, `AgentStreamEvent` variants `{ type: "reasoning-start"; id; cursor }` and `{ type: "reasoning-delta"; id; delta; cursor }`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1923,7 +1927,7 @@ Append to `tests/e2e/unit/agent/agentStreamReducer.test.ts`:
     });
   });
 
-  it("ignores reasoning start and end markers as state-only chunks", () => {
+  it("emits reasoning start and ignores the end marker", () => {
     const [started, startError] = reduceAgentStream(
       { phase: "streaming", lastCursor: 3 },
       frame({ type: "reasoning-start", id: "reasoning-1" }, 4),
@@ -1937,7 +1941,13 @@ Append to `tests/e2e/unit/agent/agentStreamReducer.test.ts`:
     expect(endError).toBeNull();
     expect(started).toEqual({
       state: { phase: "streaming", lastCursor: 4 },
-      events: [],
+      events: [
+        {
+          type: "reasoning-start",
+          id: "reasoning-1",
+          cursor: 4,
+        },
+      ],
     });
     expect(ended).toEqual({
       state: { phase: "streaming", lastCursor: 5 },
@@ -2038,6 +2048,7 @@ add all three to `streamPartSchema`, extend `knownPartTypes` with
 
 ```ts
 export type AgentStreamEvent =
+  | { type: "reasoning-start"; id: string; cursor: number }
   | { type: "reasoning-delta"; id: string; delta: string; cursor: number }
   | { type: "text-delta"; id: string; delta: string; cursor: number }
   | {
@@ -2058,12 +2069,25 @@ In `src/models/agentStreamReducer.ts`:
     case "start":
       return invalid();
     case "start-step":
-    case "reasoning-start":
     case "reasoning-end":
     case "text-start":
     case "text-end":
     case "finish-step":
       return [{ state: nextState(state.phase), events: [] }, null];
+    case "reasoning-start":
+      return [
+        {
+          state: nextState("streaming"),
+          events: [
+            {
+              type: "reasoning-start",
+              id: part.id,
+              cursor: frame.cursor,
+            },
+          ],
+        },
+        null,
+      ];
     case "reasoning-delta":
       return [
         {
@@ -2109,8 +2133,8 @@ git commit -m "feat(agent): parse reasoning stream chunks on the client"
 - Test: `tests/e2e/unit/agent/fakeAgentModel.test.ts`
 
 **Interfaces:**
-- Consumes: Task 4 `AgentReasoningPart` and `reasoning-delta` events.
-- Produces: `RunMaterializer.reasoningDelta(text, cursor)`; `createAgentRunMaterializer({ ..., reasoningPartId })`; `runHandleSchema` accepts `reasoningPartId`; `createFakeAgentModel({ ..., reasoningChunks })`.
+- Consumes: Task 4 `AgentReasoningPart`, `reasoning-start` and `reasoning-delta` events.
+- Produces: `RunMaterializer.reasoningStart()` and `RunMaterializer.reasoningDelta(text, cursor)`; `createAgentRunMaterializer({ ..., reasoningPartId })`; `runHandleSchema` accepts `reasoningPartId`; `createFakeAgentModel({ ..., reasoningChunks })`.
 
 - [ ] **Step 1: Write the failing materializer test**
 
@@ -2144,7 +2168,14 @@ function materializer() {
 describe("AgentRunMaterializer reasoning", () => {
   it("keeps reasoning and text in separate ordered parts", () => {
     const run = materializer();
-    run.start(handle, "2026-11-05T00:00:00.000Z");
+    const started = run.start(handle, "2026-11-05T00:00:00.000Z");
+    expect(started.parts.map((part) => part.type)).toEqual(["text"]);
+
+    const reasoningStarted = run.reasoningStart();
+    expect(reasoningStarted.parts.map((part) => part.type)).toEqual([
+      "reasoning",
+      "text",
+    ]);
     run.reasoningDelta("先分析", 3);
     const snapshot = run.delta("最终回答", 4);
 
@@ -2166,6 +2197,7 @@ describe("AgentRunMaterializer reasoning", () => {
   it("marks both parts terminal when the run finishes", () => {
     const run = materializer();
     run.start(handle, "2026-11-05T00:00:00.000Z");
+    run.reasoningStart();
     run.reasoningDelta("推理", 3);
     const snapshot = run.finish("completed", "2026-11-05T00:00:02.000Z");
 
@@ -2300,7 +2332,7 @@ Append to `tests/e2e/unit/agent/agentRunClient.test.ts`, using the existing help
 - [ ] **Step 3: Run the tests to verify they fail**
 
 Run: `pnpm vitest run tests/e2e/unit/agent/agentRunMaterializer.test.ts tests/e2e/unit/agent/agentRunClient.test.ts`
-Expected: FAIL, `reasoningDelta` is not a function and no reasoning Part exists.
+Expected: FAIL, `reasoningStart` and `reasoningDelta` are not functions and no reasoning Part exists.
 
 - [ ] **Step 4: Add the reasoning Part to the Materializer**
 
@@ -2309,6 +2341,7 @@ In `src/models/agentRunMaterializer.ts`:
 ```ts
 export type RunMaterializer = {
   start: (handle: AgentRunHandle, timestamp: string) => AgentMessageSnapshot;
+  reasoningStart: () => AgentMessageSnapshot;
   reasoningDelta: (text: string, cursor: number) => AgentMessageSnapshot;
   delta: (text: string, cursor: number) => AgentMessageSnapshot;
   finish: (status: AgentRunStatus, timestamp: string) => AgentMessageSnapshot;
@@ -2340,20 +2373,6 @@ Replace the part initialisation with:
     (part): part is Extract<AgentMessagePart, { type: "error" }> =>
       part.type === "error",
   );
-
-  if (!reasoningPart && input.reasoningPartId) {
-    reasoningPart = {
-      id: input.reasoningPartId,
-      messageId: input.assistantMessageId,
-      runId: input.runId,
-      index: 0,
-      type: "reasoning",
-      status: "streaming",
-      content: { type: "reasoning", text: "" },
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-  }
 
   if (!textPart) {
     textPart = {
@@ -2421,19 +2440,7 @@ In `start`, rebuild both parts:
         createdAt: message.createdAt,
         updatedAt: startedAt,
       };
-      reasoningPart = handle.reasoningPartId
-        ? {
-            id: handle.reasoningPartId,
-            messageId: handle.assistantMessageId,
-            runId: handle.runId,
-            index: 0,
-            type: "reasoning",
-            status: "streaming",
-            content: { type: "reasoning", text: "" },
-            createdAt: startedAt,
-            updatedAt: startedAt,
-          }
-        : undefined;
+      reasoningPart = undefined;
       textPart = {
         id: handle.assistantPartId,
         messageId: handle.assistantMessageId,
@@ -2446,6 +2453,27 @@ In `start`, rebuild both parts:
         updatedAt: startedAt,
       };
       errorPart = undefined;
+      return snapshot();
+    },
+
+    reasoningStart() {
+      if (reasoningPart || !input.reasoningPartId) {
+        return snapshot();
+      }
+      const updatedAt = new Date().toISOString();
+      reasoningPart = {
+        id: input.reasoningPartId,
+        messageId: input.assistantMessageId,
+        runId: input.runId,
+        index: 0,
+        type: "reasoning",
+        status: "streaming",
+        content: { type: "reasoning", text: "" },
+        createdAt: updatedAt,
+        updatedAt,
+      };
+      textPart = { ...textPart!, index: 1, updatedAt };
+      message = { ...message, status: "streaming", updatedAt };
       return snapshot();
     },
 
@@ -2482,6 +2510,10 @@ Add `AgentReasoningPart` to the imports.
 In `src/models/agentRunClient.ts`:
 
 ```ts
+        if (event.type === "reasoning-start") {
+          input.handlers.onSnapshot(input.materializer.reasoningStart());
+          continue;
+        }
         if (event.type === "reasoning-delta") {
           input.handlers.onSnapshot(
             input.materializer.reasoningDelta(event.delta, event.cursor),
@@ -2814,7 +2846,7 @@ describe("AgentReasoningPanel", () => {
       <AgentReasoningPanel part={reasoningPart("先分析")} textStarted={false} />,
     );
 
-    expect(screen.getByRole("button", { name: "思考中..." })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Reasoning" })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
@@ -2832,7 +2864,7 @@ describe("AgentReasoningPanel", () => {
       <AgentReasoningPanel part={reasoningPart("先分析")} textStarted />,
     );
 
-    expect(screen.getByRole("button", { name: "思考中..." })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Reasoning" })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
@@ -2846,7 +2878,7 @@ describe("AgentReasoningPanel", () => {
     rerender(
       <AgentReasoningPanel part={reasoningPart("先分析")} textStarted={false} />,
     );
-    const toggle = screen.getByRole("button", { name: "思考中..." });
+    const toggle = screen.getByRole("button", { name: "Reasoning" });
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(toggle);
@@ -2856,7 +2888,7 @@ describe("AgentReasoningPanel", () => {
       <AgentReasoningPanel part={reasoningPart("先分析")} textStarted />,
     );
 
-    expect(screen.getByRole("button", { name: "思考中..." })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Reasoning" })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
@@ -2870,18 +2902,66 @@ describe("AgentReasoningPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "思考中..." })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Reasoning" })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
+  });
+
+  it("only follows reasoning updates while the content is near the bottom", () => {
+    const { container, rerender } = render(
+      <AgentReasoningPanel
+        part={reasoningPart("第一段")}
+        textStarted={false}
+      />,
+    );
+    const content = container.querySelector(
+      "#reasoning-panel-reasoning-1",
+    ) as HTMLDivElement;
+    Object.defineProperties(content, {
+      scrollHeight: { configurable: true, value: 1_000 },
+      clientHeight: { configurable: true, value: 500 },
+      scrollTop: { configurable: true, writable: true, value: 0 },
+    });
+
+    fireEvent.scroll(content);
+    rerender(
+      <AgentReasoningPanel
+        part={reasoningPart("第一段更新")}
+        textStarted={false}
+      />,
+    );
+    expect(content.scrollTop).toBe(0);
+
+    content.scrollTop = 500;
+    fireEvent.scroll(content);
+    rerender(
+      <AgentReasoningPanel
+        part={reasoningPart("第一段再次更新")}
+        textStarted={false}
+      />,
+    );
+    expect(content.scrollTop).toBe(1_000);
   });
 });
 ```
 
 Append to `tests/e2e/unit/agent/agentMessageList.test.tsx`:
 
+Change the Testing Library import to include `act`:
+
 ```tsx
-  it("announces thinking until the first text token arrives", () => {
+import { act, fireEvent, render, screen } from "@testing-library/react";
+```
+
+Also extend the existing type import:
+
+```tsx
+import type { AgentMessage, AgentMessagePart } from "@/models/agentContracts";
+```
+
+```tsx
+  it("announces thinking until text content arrives", () => {
     useAgentStore.getState().setSessionMessages(
       "session-1",
       [
@@ -2925,7 +3005,66 @@ Append to `tests/e2e/unit/agent/agentMessageList.test.tsx`:
     render(<AgentMessageList sessionId="session-1" />);
 
     expect(screen.getByRole("status")).toHaveTextContent("Agent 正在思考");
-    expect(screen.getByRole("button", { name: "思考中..." })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Reasoning" })).toBeVisible();
+  });
+
+  it("only follows streamed updates while the user is near the bottom", () => {
+    const message = {
+      id: "assistant-1",
+      sessionId: "session-1",
+      seq: 1,
+      role: "assistant",
+      status: "streaming",
+      activeRunId: "run-1",
+      createdAt: "2026-11-05T00:00:00.000Z",
+      updatedAt: "2026-11-05T00:00:00.000Z",
+    } satisfies AgentMessage;
+    const textPart = (
+      text: string,
+    ): AgentMessagePart => ({
+      id: "text-1",
+      messageId: "assistant-1",
+      runId: "run-1",
+      index: 1,
+      type: "text",
+      status: "streaming",
+      content: { type: "text", text },
+      createdAt: "2026-11-05T00:00:00.000Z",
+      updatedAt: "2026-11-05T00:00:00.000Z",
+    });
+
+    act(() => {
+      useAgentStore
+        .getState()
+        .setSessionMessages("session-1", [message], [textPart("第一段")]);
+    });
+    render(<AgentMessageList sessionId="session-1" />);
+
+    const log = screen.getByRole("log", { name: "会话消息" });
+    Object.defineProperties(log, {
+      scrollHeight: { configurable: true, value: 1_000 },
+      clientHeight: { configurable: true, value: 500 },
+      scrollTop: { configurable: true, writable: true, value: 0 },
+    });
+
+    fireEvent.scroll(log);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    act(() => {
+      useAgentStore
+        .getState()
+        .setSessionMessages("session-1", [message], [textPart("第一段更新")]);
+    });
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+
+    log.scrollTop = 500;
+    fireEvent.scroll(log);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    act(() => {
+      useAgentStore
+        .getState()
+        .setSessionMessages("session-1", [message], [textPart("第一段再次更新")]);
+    });
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
   });
 ```
 
@@ -2994,7 +3133,7 @@ export function AgentReasoningPanel({
         ) : (
           <ChevronRight aria-hidden="true" size={13} />
         )}
-        <span>思考中...</span>
+        <span>Reasoning</span>
       </button>
       {expanded && (
         <div
@@ -3026,6 +3165,38 @@ import type {
   AgentMessagePart,
   AgentReasoningPart,
 } from "@/models/agentContracts";
+```
+
+Replace the existing `endRef` scroll effect with scroll ownership for the
+message list:
+
+```tsx
+  const listRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const followTail = useRef(true);
+
+  useEffect(() => {
+    if (!followTail.current) {
+      return;
+    }
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, partsByMessageId]);
+```
+
+Update the outer log element to track whether the user is near the bottom:
+
+```tsx
+    <div
+      ref={listRef}
+      role="log"
+      aria-label="会话消息"
+      className="h-full overflow-y-auto"
+      onScroll={(event) => {
+        const node = event.currentTarget;
+        followTail.current =
+          node.scrollHeight - node.scrollTop - node.clientHeight < 8;
+      }}
+    >
 ```
 
 Rename `runAnnouncement` to take the parts map:
@@ -3177,7 +3348,7 @@ test("keeps reasoning above the answer across reloads", async ({ page }) => {
   await composer.fill("整理今天的重点");
   await page.getByRole("button", { name: "发送" }).click();
 
-  const toggle = page.getByRole("button", { name: "思考中..." });
+  const toggle = page.getByRole("button", { name: "Reasoning" });
   await expect(toggle).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByText("先确认用户意图", { exact: false })).toBeVisible();
@@ -3192,7 +3363,7 @@ test("keeps reasoning above the answer across reloads", async ({ page }) => {
   await expect(page.getByText("先确认用户意图", { exact: false })).toBeVisible();
 
   await page.reload();
-  const restored = page.getByRole("button", { name: "思考中..." });
+  const restored = page.getByRole("button", { name: "Reasoning" });
   await expect(restored).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByText("先确认用户意图", { exact: false })).toHaveCount(0);
   await restored.click();
@@ -3332,7 +3503,7 @@ MiMo delta.reasoning_content
 - `agentStreamSchema` 识别三个 reasoning 片段。
 - `agentRunMaterializer` 独立维护 reasoning Part 与 text Part。
 - `agentReasoningPanel` 负责折叠、滚动态和可访问性。
-- 标题固定为 `思考中...`，纯文本展示，不做 Markdown 渲染。
+- 标题固定为 `Reasoning`，纯文本展示，不显示计时器、耗时或 token，也不做 Markdown 渲染。
 
 ## 5. 测试位置
 
@@ -3347,6 +3518,7 @@ MiMo delta.reasoning_content
 
 - 只识别 `reasoning_content`，未做多供应商适配。
 - reasoning 不渲染 Markdown。
+- reasoning 不解析 usage，不展示计时器、耗时或 token。
 - 旧的 `/api/v1/agent/stream` 端点仍忽略 reasoning。
 - 服务端进程重启不会继续原 Provider 流。
 ````
@@ -3381,7 +3553,9 @@ git commit -m "docs: record agent reasoning implementation"
 - Design section 10.5 (event order) is covered by `TestCoordinatorEmitsReasoningBeforeText`.
 - Design section 11 (contracts, schema, reducer, materializer) is covered by Tasks 4 and 5.
 - Design section 12 (recovery) is covered by Task 3 and Task 5's snapshot test.
-- Design section 13 (UI, accessibility, auto rules) is covered by Task 6 and Task 7.
+- Design section 13.1-13.5 (title, UI, accessibility, auto rules) is covered by Task 6 and Task 7.
+- Design section 13.6 (outer and inner near-bottom scroll ownership) is covered by the `agentMessageList` and `agentReasoningPanel` unit tests in Task 6.
 - Design section 14 (privacy, no reasoning logs) is preserved: no step adds reasoning content to logs.
 - Design section 15 (test matrix) is covered across Tasks 1-7.
 - Design section 16 (acceptance) is validated by Task 8 Step 4.
+- The fixed `Reasoning` title and the absence of timer, usage, token and metadata behavior are enforced in Task 6 and Task 7.
