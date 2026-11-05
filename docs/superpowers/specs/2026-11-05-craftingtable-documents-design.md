@@ -237,7 +237,7 @@ type SearchHit = {
 |------|------|
 | `q` | trim 后 1–100 rune；空串直接返回 `{ items: [], nextCursor: null }`，不视为错误 |
 | `limit` | 默认 20，范围 1–50，超范围按边界截断 |
-| `cursor` | 上一次响应的 `nextCursor`，opaque 字符串；非法则 `400 VALIDATION_ERROR` |
+| `cursor` | 上一次响应的 `nextCursor`，opaque 字符串；非法或与 `q` 不匹配则 `400 VALIDATION_ERROR` |
 
 匹配与排序：
 
@@ -247,13 +247,25 @@ type SearchHit = {
 4. 只查 `deleted_at IS NULL`。
 5. 响应不含正文，避免搜索拉回大字段。
 
+分页实现：
+
+1. 查询 `limit + 1` 条，多出则说明还有下一页；返回前截断为 `limit` 条，`nextCursor` 指向第 `limit` 条。不额外执行 `COUNT`，避免统计与取页之间的竞态。
+2. 没有下一页时 `nextCursor` 显式返回 `null`，不使用字段省略。
+3. `limit` 默认 20、上限 50 为侧栏搜索的刻意选择，与 IM 频道搜索（默认 50、上限 100）不同：侧栏宽度 232px，20 条已超过一屏。
+
 `path` 通过 `WITH RECURSIVE` 向上收集祖先标题，从根到父，最多 8 层，超过则截断。SQLite 与 PostgreSQL 均支持该语法。
 
-游标编码：base64(`rank\x1fupdatedAt\x1fid`)，服务端自行解析，前端不解释内容。`rank` 由 SQL 计算，前缀命中为 `0`，其余为 `1`：
+游标编码：`base64.RawURLEncoding(JSON{ rank, updatedAt, id, qHash })`，服务端自行解析，前端不解释内容。`rank` 由 SQL 计算，前缀命中为 `0`，其余为 `1`：
 
 ```sql
 CASE WHEN lower(title) LIKE lower(?) ESCAPE '\' THEN 0 ELSE 1 END AS rank
 ```
+
+`qHash` 是规范化查询词（trim 后大小写折叠）的 SHA-256 前 8 字节十六进制。服务端必须先校验 `qHash` 与本次请求的 `q` 一致，否则返回 `400 VALIDATION_ERROR`，消息「搜索游标与查询词不匹配」。
+
+不匹配校验的必要性：`rank` 依赖查询词，若客户端用 `q=A` 的游标请求 `q=B`，位置比较会跳过或重复结果且不报错。用位置拼接的游标无法承载这个字段，因此游标采用命名 JSON 载荷。
+
+游标字段缺失、`rank` 不在 `{0,1}`、`updatedAt` 不是 RFC3339、`id` 不是 UUID 之一时，一律视为非法游标。
 
 分页使用 keyset 比较，排序方向为 `rank ASC, updated_at DESC, id DESC`，predicate 必须显式展开：
 
@@ -262,7 +274,7 @@ WHERE rank > :rank
    OR (rank = :rank AND updated_at < :updatedAt)
    OR (rank = :rank AND updated_at = :updatedAt AND id < :id)
 ORDER BY rank ASC, updated_at DESC, id DESC
-LIMIT :limit
+LIMIT :limit + 1
 ```
 
 `rank` 是查询内表达式，SQLite 不保证 `WHERE` 可引用别名，因此实际实现把 `CASE` 表达式重复在 `WHERE` 中，或在子查询里先投影后再过滤；两种写法在 SQLite 与 PostgreSQL 上语义一致。
@@ -287,6 +299,8 @@ type Repository interface {
 1. `Search` 的大小写不敏感语义由接口注释定义，实现各自满足。
 2. `SoftDelete` 必须在单个事务内完成递归标记，并返回全部受影响 id。
 3. 所有方法不得返回已软删除节点。
+4. `Search` 内部取 `limit + 1` 条判定是否有下一页，返回给上层的是截断后的 `limit` 条与 `nextCursor`。
+5. 游标 `qHash` 校验在 `search.go` 的编解码层完成；Controller 只负责把解析失败映射为 `400 VALIDATION_ERROR`。
 
 ## 8. 前端 MVC 结构
 
