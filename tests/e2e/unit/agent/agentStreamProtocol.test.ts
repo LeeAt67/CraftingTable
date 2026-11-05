@@ -152,4 +152,99 @@ describe("agentStreamProtocol", () => {
       },
     });
   });
+
+  it("rejects malformed JSON", async () => {
+    const stream = streamOf("data: not-json\n\n");
+
+    await expect(collect(readAgentStream(stream))).rejects.toMatchObject({
+      agentError: {
+        code: "PROTOCOL_INVALID_METADATA",
+        kind: "protocol",
+        retryable: false,
+      },
+    });
+  });
+
+  it("rejects duplicate start events", async () => {
+    const start =
+      'data: {"type":"start","messageId":"message-1","messageMetadata":{"sessionId":"session-1","runId":"run-1","userMessageId":"user-1"}}';
+    const stream = streamOf([start, start, "data: [DONE]", "", ""].join("\n\n"));
+
+    await expect(collect(readAgentStream(stream))).rejects.toMatchObject({
+      agentError: {
+        code: "PROTOCOL_INVALID_METADATA",
+        kind: "protocol",
+        retryable: false,
+      },
+    });
+  });
+
+  it("ignores unknown chunks while streaming", async () => {
+    const stream = streamOf(
+      [
+        'data: {"type":"start","messageId":"message-1","messageMetadata":{"sessionId":"session-1","runId":"run-1","userMessageId":"user-1"}}',
+        'data: {"type":"future-warning","message":"ignored"}',
+        'data: {"type":"text-delta","id":"part-1","delta":"你好"}',
+        'data: {"type":"finish","finishReason":"stop","messageMetadata":{"runId":"run-1","status":"completed"}}',
+        "data: [DONE]",
+        "",
+        "",
+      ].join("\n\n"),
+    );
+
+    await expect(collect(readAgentStream(stream))).resolves.toEqual([
+      { type: "text-delta", id: "part-1", delta: "你好" },
+      {
+        type: "finish",
+        finishReason: "stop",
+        runId: "run-1",
+        status: "completed",
+      },
+    ]);
+  });
+
+  it("rejects a known chunk after the terminal event", async () => {
+    const stream = streamOf(
+      [
+        'data: {"type":"start","messageId":"message-1","messageMetadata":{"sessionId":"session-1","runId":"run-1","userMessageId":"user-1"}}',
+        'data: {"type":"finish","finishReason":"stop","messageMetadata":{"runId":"run-1","status":"completed"}}',
+        'data: {"type":"text-delta","id":"part-1","delta":"too late"}',
+        "data: [DONE]",
+        "",
+        "",
+      ].join("\n\n"),
+    );
+
+    await expect(collect(readAgentStream(stream))).rejects.toMatchObject({
+      agentError: {
+        code: "PROTOCOL_INVALID_METADATA",
+        kind: "protocol",
+        retryable: false,
+      },
+    });
+  });
+
+  it("maps an SSE error chunk to a terminal error event", async () => {
+    const stream = streamOf(
+      [
+        'data: {"type":"start","messageId":"message-1","messageMetadata":{"sessionId":"session-1","runId":"run-1","userMessageId":"user-1"}}',
+        'data: {"type":"error","errorText":"模型生成失败"}',
+        "data: [DONE]",
+        "",
+        "",
+      ].join("\n\n"),
+    );
+
+    await expect(collect(readAgentStream(stream))).resolves.toEqual([
+      {
+        type: "error",
+        error: {
+          code: "AGENT_PROVIDER_FAILED",
+          kind: "server",
+          message: "模型生成失败",
+          retryable: true,
+        },
+      },
+    ]);
+  });
 });
