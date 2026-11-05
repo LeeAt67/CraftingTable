@@ -12,12 +12,31 @@ type Envelope<T> =
 
 const baseUrl = import.meta.env.VITE_API_BASE ?? "/api/v1";
 
+async function readEnvelope<T>(response: Response): Promise<Envelope<T> | null> {
+  const text = await response.text();
+  if (!text.trim()) {
+    return null;
+  }
+  try {
+    return JSON.parse(text) as Envelope<T>;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...init,
   });
-  const body = (await response.json()) as Envelope<T>;
+  const body = await readEnvelope<T>(response);
+  if (!body) {
+    throw new Error(
+      response.ok
+        ? "服务返回了无效响应，请稍后重试"
+        : "服务暂时不可用，请稍后重试",
+    );
+  }
 
   if (!response.ok || "error" in body) {
     throw new Error("error" in body ? body.error.message : "请求失败");
