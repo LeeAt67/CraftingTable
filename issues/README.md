@@ -24,7 +24,7 @@ CraftingTable 的缺陷索引。**维护规范见 [AGENTS.md](./AGENTS.md)**，�
 | --- | --- | --- | --- | --- |
 | [BUG-001](./docs/BUG-001-opennode-race.md) | 快速切换文档时旧响应覆盖新文档 | P1 | 已修复待验证 | 2026-11-06 |
 | [BUG-002](./docs/BUG-002-save-status-cross-document.md) | 切文档后保存状态串到另一篇文档 | P1 | 待修复 | 2026-11-06 |
-| [BUG-003](./docs/BUG-003-tree-load-unrecoverable.md) | 目录树加载失败后无法恢复且无错误提示 | P1 | 待修复 | 2026-11-06 |
+| [BUG-003](./docs/BUG-003-tree-load-unrecoverable.md) | 目录树加载失败后无法恢复且无错误提示 | P1 | 已修复待验证 | 2026-11-06 |
 | [BUG-004](./docs/BUG-004-overlong-content-unclear-error.md) | 正文超限提示「参数错误」且无前端预校验 | P2 | 待修复 | 2026-11-06 |
 
 ## 其它模块

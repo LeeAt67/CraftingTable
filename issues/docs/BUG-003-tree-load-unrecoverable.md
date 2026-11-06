@@ -2,12 +2,13 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 状态 | `待修复` |
+| 状态 | `已修复待验证` |
 | 严重级别 | `P1` |
 | 模块 | `docs` |
 | 发现日期 | 2026-11-06 |
 | 发现方式 | 页面复现 |
 | 影响版本 | `feat/docs-writing` @ `668ef11` |
+| 修复提交 | `f13c531`（依赖 `e7850a1` 的 `nodePhase` 拆分） |
 | 当前分支 | `feat/docs-writing` |
 
 ## S — 背景
@@ -102,12 +103,20 @@ toast         ：Failed to fetch              ← 英文原始异常
 
 英文 toast 来自 `messageOf(error)`：`fetch` 抛出的 `TypeError("Failed to fetch")` 被原样展示，没有做本地化映射。
 
-## 修复建议
+## 修复方式（已实施，`f13c531`）
 
-1. **拆分状态**：把单一 `phase` 拆成 `treePhase` 与 `nodePhase`，让树加载与节点加载互不影响。涉及 `src/controllers/stores/docsStore.ts`、`src/controllers/effects/useDocsEffect.ts`、`src/pages/docs/docPage.tsx`。
-2. **侧栏补错误态**：树视图在 `treePhase === "error"` 时渲染中文错误行与「重试」按钮，调用 `effect.loadTree()`。涉及 `src/components/docs/docSidebar.tsx`。
-3. **守卫改为允许重试**：挂载守卫从 `phase === "idle"` 改为 `treePhase === "idle"`；重试时无条件发起请求。
-4. **错误文案本地化**：`messageOf` 对非 `Error` 或网络类异常返回中文兜底，例如「网络异常，请稍后重试」。涉及 `src/controllers/effects/useDocsEffect.ts`。
+四项改动：
+
+1. **状态拆分**（`e7850a1` 已完成）：`phase` 只表示目录树状态，当前文档改用 `nodePhase`。树加载不再被打开文档的失败污染。
+2. **侧栏错误态**：`docSidebar.tsx` 在 `phase === "error"` 时渲染 `role="alert"` 卡片，包含标题「加载文档目录失败」、中文原因与「重试」按钮；`phase === "loading"` 时渲染三个骨架行。
+3. **守卫允许重试**：挂载守卫从 `phase === "idle"` 放宽为 `phase === "idle" || phase === "error"`，接口恢复后导航回 `#/docs` 即可自动重建目录树，不必整页刷新。
+4. **错误文案本地化**：`messageOf` 识别 `Failed to fetch` / `Load failed` / `NetworkError` 等浏览器原始异常，统一返回「网络异常，请检查服务是否可用后重试」。
+
+涉及文件：
+
+- `src/components/docs/docSidebar.tsx`
+- `src/controllers/effects/useDocsEffect.ts`
+- `src/controllers/stores/docsStore.ts`（`nodePhase` 拆分，见 BUG-001）
 
 ## 验证方式
 
@@ -116,18 +125,20 @@ pnpm typecheck
 pnpm vitest run tests/e2e/unit/docs/docSidebar.test.tsx
 ```
 
-回归用例应断言：
+回归用例：
 
-1. `loadTree` 失败时侧栏出现「加载文档目录失败」与「重试」按钮。
-2. 点击重试后会再次调用 `model.listTree`。
-3. 重试成功后渲染出目录树。
-4. 失败提示为中文。
+| 用例 | 断言 |
+| --- | --- |
+| `shows a Chinese error with retry when the tree fails to load` | 失败时出现「加载文档目录失败」+「重试」，原英文 `Failed to fetch` 不出现，点击重试后目录树渲染成功 |
+| `retries the tree automatically after remounting from an error` | 处于 `error` 状态时重新挂载会自动再调一次 `listTree` 并恢复 |
 
-页面验证：
+门禁结果（2026-11-06）：`pnpm typecheck` 通过，`pnpm vitest run` 122 个用例全部通过。
 
-1. 拦截 `/api/v1/docs/tree` 并访问 `#/docs`。
-2. 确认侧栏出现中文错误与重试按钮。
-3. 取消拦截，点击重试，确认目录树出现（不刷新整页）。
+页面验证（修复后实测）：
+
+1. 拦截 `/api/v1/docs/tree` 并访问 `#/docs` → 侧栏显示 `加载文档目录失败 / 网络异常，请检查服务是否可用后重试 / 重试`，toast 为中文。
+2. 取消拦截后点击「重试」→ 目录树恢复正常。
+3. 再次拦截制造失败，取消拦截后在应用内导航到 `#/` 再回 `#/docs` → 目录树自动恢复，无需整页刷新（修复前 `rows` 恒为 0）。
 
 ## 关联
 
