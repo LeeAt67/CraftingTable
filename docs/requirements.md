@@ -128,7 +128,8 @@
 | Q-02 | 响应式与触摸目标 | P1 | 部分实现 | [验收标准 Q-02](./research/2026-11-05-non-agent-workbench-requirement-research.md)；390/768/1024/1440 无横向滚动已有 E2E，触摸目标尺寸未校验 |
 | Q-03 | 性能预算 | P2 | 待实现 | [验收标准 Q-03](./research/2026-11-05-non-agent-workbench-requirement-research.md) |
 | Q-04 | 观测与隐私日志 | P1 | 部分实现 | [验收标准 Q-04](./research/2026-11-05-non-agent-workbench-requirement-research.md)；已有 `requestId` 与请求日志，前端错误上报与脱敏检查未做 |
-| Q-05 | 测试基线 | P0 | 部分实现 | [验收标准 Q-05](./research/2026-11-05-non-agent-workbench-requirement-research.md)；今日后端有单元与集成测试，前端编辑/删除/筛选用例未补 |
+| Q-05 | 测试基线 | P0 | 部分实现 | [验收标准 Q-05](./research/2026-11-05-non-agent-workbench-requirement-research.md)、[测试策略调研 §8 阶段 1](./research/2026-11-06-testing-strategy.md)；后端 122 个 Go 测试、前端 100 个 Vitest 用例已通过，但边界覆盖按分支点核算仍缺口较大：`scheduledSeconds` 负值保护、`today_tools.go` 四条错误路径、`todayStore` 不变量、`apiModel` 五条分支均无用例 |
+| Q-06 | 测试基础设施与质量门禁：覆盖率采集、CI、竞态与随机顺序、不稳定用例检测 | P0 | 待实现 | [测试策略调研 §2.3、§5.4、§8 阶段 0/3](./research/2026-11-06-testing-strategy.md)；实测缺口：无 CI、无 `golangci-lint`、无 ESLint、未装 `@vitest/coverage-v8`、集成测试因独立进程贡献 0% 覆盖率、Playwright `trace` 因未配 `retries` 永不生效 |
 
 ### 3.7 Agent 能力（AG）
 
@@ -193,6 +194,7 @@
 | [通用 Agent 调研与当前实现对比](./research/2026-11-06-general-agent-comparison.md) | 调研 | AG-01 至 AG-09 | 调研结论，未进入设计 |
 | [AG-01 工具运行时深度调研](./research/2026-11-06-ag-01-tool-runtime-deep-dive.md) | 调研 | AG-01 | 已实现 |
 | [SQLite 迁移 PostgreSQL 条件调研](./research/2026-11-06-sqlite-to-postgresql-migration-conditions.md) | 调研 | D-01 | 调研结论，当前不迁移 |
+| [测试策略调研](./research/2026-11-06-testing-strategy.md) | 调研 | Q-05、Q-06 | 调研结论，未进入设计 |
 | [Agent 设计](./superpowers/specs/2026-11-05-craftingtable-agent-design.md) | 设计 | AG 系列的现有基线 | 已确认 |
 | [Run 恢复 ADR](./architecture/ADR-001-agent-run-recovery.md) | 决策记录 | AG-05 | 已确认 |
 | [工程化设计规范](./superpowers/specs/2026-11-05-craftingtable-engineering-design.md) | 规范 | Q-01、Q-05 及全部需求的流程约束 | 已确认 |
@@ -212,6 +214,7 @@
 - [通用 Agent 调研](./research/2026-11-06-general-agent-comparison.md)：AG 需求的来源与差距分析
 - [AG-01 工具运行时深度调研](./research/2026-11-06-ag-01-tool-runtime-deep-dive.md)：工具契约、执行、持久化、Provider 映射与首版范围
 - [SQLite 迁移 PostgreSQL 条件调研](./research/2026-11-06-sqlite-to-postgresql-migration-conditions.md)：D-01 的触发条件、量化门槛与前置条件
+- [测试策略调研](./research/2026-11-06-testing-strategy.md)：Q-05、Q-06 的边界覆盖方法、框架组织、书写规范与正确性验证
 - [Agent 设计](./superpowers/specs/2026-11-05-craftingtable-agent-design.md)：Agent 现有契约
 - [工程化设计规范](./superpowers/specs/2026-11-05-craftingtable-engineering-design.md)：SDD 流程与边界规则
 - [Agent 架构图](./architecture/README.md)
