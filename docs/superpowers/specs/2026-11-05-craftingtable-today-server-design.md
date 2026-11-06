@@ -3,7 +3,7 @@
 日期：2026-11-05
 状态：已评审（2026-11-05 决议），进入实施计划
 范围：`A-01` 日期与时区查询、`A-02` 删除、`A-03` 时间语义、`A-06` 错误码
-关联：[非 Agent 需求提案](./2026-11-05-craftingtable-non-agent-requirements.md)、[工程化设计规范](./2026-11-05-craftingtable-engineering-design.md)、[术语表](../../glossary.md)
+关联：[非 Agent 工作台需求调研](../../research/2026-11-05-non-agent-workbench-requirement-research.md)、[工程化设计规范](./2026-11-05-craftingtable-engineering-design.md)、[术语表](../../glossary.md)
 排除：Agent 会话、`AgentRun`、SSE 协议、Agent 持久化与恢复
 
 > 本文件只定义契约与取舍。评审通过后才编写实施计划，再写失败测试，最后实现。

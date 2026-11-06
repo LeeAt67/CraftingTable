@@ -1,36 +1,38 @@
-# CraftingTable 非 Agent 需求提案
+# CraftingTable 非 Agent 工作台需求调研
 
 日期：2026-11-05
-状态：提案（待评审，未进入实施）
+状态：调研结论（需求条目与状态以 [需求索引](../requirements.md) 为准）
 范围：今日工作台、事务条目、筛选与导航、设置、主题、数据与 API、质量门禁
 排除：Agent 会话、AgentRun、流式协议、Agent 持久化恢复和 Agent Evaluation Platform
-依据：[README](../../../README.md)、[工程化设计规范](./2026-11-05-craftingtable-engineering-design.md)、[术语表](../../glossary.md)、当前代码实现
+依据：[README](../../README.md)、[工程化设计规范](../superpowers/specs/2026-11-05-craftingtable-engineering-design.md)、[术语表](../glossary.md)、当前代码实现
 
-> 本文只提出需求，不改变已确认的工程化设计。任何需求进入实施前，先补齐对应设计或 ADR，再按 SDD 写失败测试。
+> **本文档的定位**：这是产生 T / S / N / A / Q 系列需求的调研记录，包含现状盘点、需求原则、完整验收标准、交付批次和待决策问题。
+>
+> **需求条目本身在 [需求索引](../requirements.md)**。新增需求、变更状态、调整优先级都改那里，不要在这里加新条目。本文档只在需求被重新调研时更新。
 
 ## 1. 目的
 
 Agent 之外的“今日工作台”目前只有一条最小闭环：加载今日条目、Quick Capture 新建、完成/取消完成、Light / Dark 主题。侧栏筛选、编辑、安排时间、删除、日期切换和设置页都还没有真实行为。
 
-本文把这些缺口整理成可验收的需求，明确优先级、边界和待决策问题，作为下一阶段非 Agent 工作的输入。
+本文调研这些缺口，给出可验收的判定标准、优先级建议、边界和待决策问题。**需求条目与当前状态不在这里维护**，见 [需求索引](../requirements.md)；本文只提供每条需求背后的依据。
 
 ## 2. 现状盘点
 
 | 能力 | 当前实现 | 缺口 | 证据 |
 | --- | --- | --- | --- |
-| 今日列表 | 固定查询“今天”，按开始时间和创建时间排序 | 无法查看昨天/明天，日界由服务端进程时区决定 | [controller.go](../../../server/internal/today/controller.go)、[sqlite_store.go](../../../server/internal/platform/store/sqlite_store.go) |
-| 侧栏筛选 | “全部 / 已安排 / 已完成”和分类按钮只有样式 | 点击无过滤、无选中态、无 URL 状态 | [contextSidebar.tsx](../../../src/components/shell/contextSidebar.tsx) |
-| Quick Capture | 只输入标题，创建未安排任务 | 不能选分类、不能设时间、不能连续录入 | [quickCapture.tsx](../../../src/components/today/quickCapture.tsx) |
-| 条目编辑 | API 支持 `update`，界面没有入口 | 改标题、描述、分类、时间都不可用 | [itemTimeline.tsx](../../../src/components/today/itemTimeline.tsx)、[useTodayEffect.ts](../../../src/controllers/effects/useTodayEffect.ts) |
-| 删除 | API 和模型都没有删除 | 误建条目无法清理 | [item.go](../../../server/internal/today/item.go)、[contracts.ts](../../../src/models/contracts.ts) |
-| 安排时间 | 新建时可传 `startAt`，界面不传 | 无法把“未安排”变成“已安排”，也无法调整时间 | [quickCapture.tsx](../../../src/components/today/quickCapture.tsx) |
-| 摘要 | “专注”按带起止时间的 `event` 求和 | 口径未定义，负时长和跨天没有处理 | [summaryStrip.tsx](../../../src/components/today/summaryStrip.tsx) |
-| 完成度 | 侧栏按“已完成 / 全部”计算 | 与摘要、筛选口径没有统一说明 | [contextSidebar.tsx](../../../src/components/shell/contextSidebar.tsx) |
-| 设置 | 静态占位页 | 没有外观、偏好、数据或诊断入口 | [settings/index.tsx](../../../src/pages/settings/index.tsx) |
-| 主题 | `light` / `dark`，持久化键为 `leeat-theme` | 不支持跟随系统，键名与产品名不一致 | [themeStore.ts](../../../src/controllers/stores/themeStore.ts) |
-| API | 全部为 `GET` / `POST`，统一 `{ data }` / `{ error }` | 无日期参数、无删除、无并发控制、无幂等 | [apiModel.ts](../../../src/models/apiModel.ts)、[router.go](../../../server/internal/platform/httpapi/router.go) |
-| 可访问性 | 基础 `aria-label` 和 Dialog 焦点管理 | 无 `aria-live`、无跳过导航、列表状态变化不播报 | [itemTimeline.tsx](../../../src/components/today/itemTimeline.tsx) |
-| 测试 | 今日只覆盖创建、完成和持久化；设置只覆盖导航 | 编辑、删除、筛选、日期、时区、空状态无验收测试 | [tests/e2e/modules/today](../../../tests/e2e/modules/today)、[settings.e2e.ts](../../../tests/e2e/modules/settings/settings.e2e.ts) |
+| 今日列表 | 固定查询“今天”，按开始时间和创建时间排序 | 无法查看昨天/明天，日界由服务端进程时区决定 | [controller.go](../../server/internal/today/controller.go)、[sqlite_store.go](../../server/internal/platform/store/sqlite_store.go) |
+| 侧栏筛选 | “全部 / 已安排 / 已完成”和分类按钮只有样式 | 点击无过滤、无选中态、无 URL 状态 | [contextSidebar.tsx](../../src/components/shell/contextSidebar.tsx) |
+| Quick Capture | 只输入标题，创建未安排任务 | 不能选分类、不能设时间、不能连续录入 | [quickCapture.tsx](../../src/components/today/quickCapture.tsx) |
+| 条目编辑 | API 支持 `update`，界面没有入口 | 改标题、描述、分类、时间都不可用 | [itemTimeline.tsx](../../src/components/today/itemTimeline.tsx)、[useTodayEffect.ts](../../src/controllers/effects/useTodayEffect.ts) |
+| 删除 | API 和模型都没有删除 | 误建条目无法清理 | [item.go](../../server/internal/today/item.go)、[contracts.ts](../../src/models/contracts.ts) |
+| 安排时间 | 新建时可传 `startAt`，界面不传 | 无法把“未安排”变成“已安排”，也无法调整时间 | [quickCapture.tsx](../../src/components/today/quickCapture.tsx) |
+| 摘要 | “专注”按带起止时间的 `event` 求和 | 口径未定义，负时长和跨天没有处理 | [summaryStrip.tsx](../../src/components/today/summaryStrip.tsx) |
+| 完成度 | 侧栏按“已完成 / 全部”计算 | 与摘要、筛选口径没有统一说明 | [contextSidebar.tsx](../../src/components/shell/contextSidebar.tsx) |
+| 设置 | 静态占位页 | 没有外观、偏好、数据或诊断入口 | [settings/index.tsx](../../src/pages/settings/index.tsx) |
+| 主题 | `light` / `dark`，持久化键为 `leeat-theme` | 不支持跟随系统，键名与产品名不一致 | [themeStore.ts](../../src/controllers/stores/themeStore.ts) |
+| API | 全部为 `GET` / `POST`，统一 `{ data }` / `{ error }` | 无日期参数、无删除、无并发控制、无幂等 | [apiModel.ts](../../src/models/apiModel.ts)、[router.go](../../server/internal/platform/httpapi/router.go) |
+| 可访问性 | 基础 `aria-label` 和 Dialog 焦点管理 | 无 `aria-live`、无跳过导航、列表状态变化不播报 | [itemTimeline.tsx](../../src/components/today/itemTimeline.tsx) |
+| 测试 | 今日只覆盖创建、完成和持久化；设置只覆盖导航 | 编辑、删除、筛选、日期、时区、空状态无验收测试 | [tests/e2e/modules/today](../../tests/e2e/modules/today)、[settings.e2e.ts](../../tests/e2e/modules/settings/settings.e2e.ts) |
 
 ## 3. 需求原则
 
@@ -579,12 +581,14 @@ And 脏数据不计入且不产生负数
 ## 8. 与 Agent 的边界
 
 - 本文不新增、不修改任何 Agent 路由、`RunEvent`、SSE 协议或 Agent Store。
-- 本文不要求 Agent 读取今日条目；若未来需要，单独设计 Tool 契约，不在此提案内。
+- 本文不要求 Agent 读取今日条目；若未来需要，单独设计 Tool 契约，不在本文范围内。
 - 共享基础设施只允许复用 `httpapi`、SQLite 迁移账本和错误封套，不共享业务表。
 - 若设置采用服务端存储，新增独立表，并通过独立迁移文件管理；不得修改已应用迁移的内容。
 - 非 Agent 需求的测试不得依赖 Fake Agent Provider。
 
 ## 9. 需求追踪
+
+需求状态以 [需求索引](../requirements.md) 为准；本表只记录每类需求应当落到哪个验收位置。
 
 | 需求 | 验收测试位置 | 设计文档 |
 | --- | --- | --- |
