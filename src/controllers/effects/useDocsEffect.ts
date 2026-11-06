@@ -92,7 +92,9 @@ export function createDocsEffect(
 
   const persistContent = (target: { id: string; content: string }) => {
     saveSequence = saveSequence.then(async () => {
-      useDocsStore.getState().setSaveStatus("saving");
+      if (useDocsStore.getState().activeNodeId === target.id) {
+        useDocsStore.getState().setSaveStatus("saving");
+      }
       try {
         const result = await model.saveContent(target);
         useDocsStore.getState().markSaved({
@@ -103,7 +105,9 @@ export function createDocsEffect(
         flushTitleIfPending(target.id);
       } catch (error) {
         const message = messageOf(error);
-        useDocsStore.getState().setSaveStatus("error");
+        if (useDocsStore.getState().activeNodeId === target.id) {
+          useDocsStore.getState().setSaveStatus("error");
+        }
         notify.error(message);
       }
     });

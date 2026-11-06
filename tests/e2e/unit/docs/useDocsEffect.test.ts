@@ -303,4 +303,42 @@ describe("docsEffect", () => {
     await pending;
     expect(useDocsStore.getState().nodePhase).toBe("ready");
   });
+
+  it("keeps the new document idle when the previous document finishes saving", async () => {
+    const nodeA = { ...document, id: "doc-a", title: "文档 A", content: "" };
+    const nodeB = { ...document, id: "doc-b", title: "文档 B", content: "" };
+    const saveContent = vi
+      .fn()
+      .mockResolvedValue({ id: "doc-a", updatedAt: "2026-11-06T00:00:09Z" });
+
+    const effect = createDocsEffect(createModel({ saveContent }), notify);
+
+    useDocsStore.getState().setActiveNode(nodeA);
+    effect.applyContentChange("doc-a", "# A");
+    useDocsStore.getState().setActiveNode(nodeB);
+
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(saveContent).toHaveBeenCalledWith({ id: "doc-a", content: "# A" });
+    expect(useDocsStore.getState().activeNodeId).toBe("doc-b");
+    expect(useDocsStore.getState().saveStatus).toBe("idle");
+  });
+
+  it("keeps the new document idle when the previous document fails to save", async () => {
+    const nodeA = { ...document, id: "doc-a", title: "文档 A", content: "" };
+    const nodeB = { ...document, id: "doc-b", title: "文档 B", content: "" };
+    const saveContent = vi.fn().mockRejectedValue(new Error("保存失败"));
+
+    const effect = createDocsEffect(createModel({ saveContent }), notify);
+
+    useDocsStore.getState().setActiveNode(nodeA);
+    effect.applyContentChange("doc-a", "# A");
+    useDocsStore.getState().setActiveNode(nodeB);
+
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(useDocsStore.getState().activeNodeId).toBe("doc-b");
+    expect(useDocsStore.getState().saveStatus).toBe("idle");
+    expect(notify.error).toHaveBeenCalledTimes(1);
+  });
 });

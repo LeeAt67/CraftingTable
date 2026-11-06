@@ -81,4 +81,23 @@ describe("docsStore", () => {
     expect(state.searchResults).toHaveLength(0);
     expect(state.searchCursor).toBeNull();
   });
+
+  it("does not mark the active document saved when another document finishes saving", () => {
+    useDocsStore.getState().setActiveNode({
+      ...document,
+      id: "doc-active",
+      content: "",
+    });
+
+    useDocsStore.getState().markSaved({
+      id: "doc-other",
+      content: "# 别的文档",
+      updatedAt: "2026-11-06T00:00:05Z",
+    });
+
+    const state = useDocsStore.getState();
+    expect(state.saveStatus).toBe("idle");
+    expect(state.activeNode?.id).toBe("doc-active");
+    expect(state.activeNode?.content).toBe("");
+  });
 });

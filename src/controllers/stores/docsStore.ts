@@ -102,8 +102,11 @@ export const useDocsStore = create<DocsStore>()((set) => ({
   setSaveStatus: (saveStatus) => set({ saveStatus }),
   markSaved: ({ id, content, updatedAt }) =>
     set((state) => {
+      const nodes = state.nodes.map((node) =>
+        node.id === id ? { ...node, updatedAt } : node,
+      );
       if (state.activeNodeId !== id) {
-        return { saveStatus: "saved" as const };
+        return { nodes };
       }
       const activeNode = state.activeNode
         ? {
@@ -115,9 +118,7 @@ export const useDocsStore = create<DocsStore>()((set) => ({
       return {
         saveStatus: "saved" as const,
         activeNode,
-        nodes: state.nodes.map((node) =>
-          node.id === id ? { ...node, updatedAt } : node,
-        ),
+        nodes,
       };
     }),
   replaceSummary: (node) =>
