@@ -78,4 +78,34 @@ describe("DocPage", () => {
     expect(screen.queryByRole("button", { name: "导出" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("文档标题")).toHaveValue("工作");
   });
+
+  it("shows a skeleton instead of the previous document while loading", async () => {
+    // 上一篇文档还留在 store 中，模拟从 A 切到 B、B 尚未返回的时刻。
+    useDocsStore.getState().setActiveNode(document);
+    useDocsStore.setState({
+      nodePhase: "loading",
+      nodeErrorMessage: null,
+    });
+
+    renderPage("doc-loading");
+
+    expect(screen.getByLabelText("正在加载文档")).toBeInTheDocument();
+    expect(screen.queryByLabelText("文档正文")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("文档标题")).not.toBeInTheDocument();
+  });
+
+  it("shows a retry affordance when the document fails to load", async () => {
+    useDocsStore.setState({
+      nodePhase: "error",
+      nodeErrorMessage: "文档不存在或已被删除",
+      activeNode: null,
+      activeNodeId: null,
+    });
+
+    renderPage("doc-missing");
+
+    expect(screen.getByText("文档不存在或已被删除")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("正在加载文档")).not.toBeInTheDocument();
+  });
 });

@@ -223,4 +223,84 @@ describe("docsEffect", () => {
 
     expect(useDocsStore.getState().searchPhase).toBe("loading");
   });
+
+  it("keeps the later document when an older response arrives last", async () => {
+    const nodeA = { ...document, id: "doc-a", title: "文档 A" };
+    const nodeB = { ...document, id: "doc-b", title: "文档 B" };
+
+    let resolveA: (node: DocNode) => void = () => undefined;
+    const slowA = new Promise<DocNode>((resolve) => {
+      resolveA = resolve;
+    });
+
+    const effect = createDocsEffect(
+      createModel({
+        getNode: vi.fn((id: string) =>
+          id === "doc-a" ? slowA : Promise.resolve(nodeB),
+        ),
+      }),
+      notify,
+    );
+
+    const first = effect.openNode("doc-a");
+    const second = effect.openNode("doc-b");
+    await second;
+
+    expect(useDocsStore.getState().activeNode?.id).toBe("doc-b");
+
+    resolveA(nodeA);
+    await first;
+
+    expect(useDocsStore.getState().activeNode?.id).toBe("doc-b");
+    expect(useDocsStore.getState().nodePhase).toBe("ready");
+  });
+
+  it("ignores a stale failure that arrives after a newer document loaded", async () => {
+    const nodeB = { ...document, id: "doc-b", title: "文档 B" };
+
+    let rejectA: (error: Error) => void = () => undefined;
+    const failingA = new Promise<DocNode>((_resolve, reject) => {
+      rejectA = reject;
+    });
+
+    const effect = createDocsEffect(
+      createModel({
+        getNode: vi.fn((id: string) =>
+          id === "doc-a" ? failingA : Promise.resolve(nodeB),
+        ),
+      }),
+      notify,
+    );
+
+    const first = effect.openNode("doc-a");
+    await effect.openNode("doc-b");
+
+    rejectA(new Error("文档不存在"));
+    await first;
+
+    expect(useDocsStore.getState().activeNode?.id).toBe("doc-b");
+    expect(useDocsStore.getState().nodePhase).toBe("ready");
+    expect(useDocsStore.getState().nodeErrorMessage).toBeNull();
+  });
+
+  it("marks the node phase as loading then ready", async () => {
+    let resolveNode: (node: DocNode) => void = () => undefined;
+    const pendingNode = new Promise<DocNode>((resolve) => {
+      resolveNode = resolve;
+    });
+
+    const effect = createDocsEffect(
+      createModel({ getNode: vi.fn(() => pendingNode) }),
+      notify,
+    );
+
+    const pending = effect.openNode("doc-1");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(useDocsStore.getState().nodePhase).toBe("loading");
+
+    resolveNode(document);
+    await pending;
+    expect(useDocsStore.getState().nodePhase).toBe("ready");
+  });
 });

@@ -32,6 +32,7 @@ export function createDocsEffect(
   let pendingSave: { id: string; content: string } | null = null;
   let pendingTitle: { id: string; title: string } | null = null;
   let searchSequence = 0;
+  let nodeSequence = 0;
   let saveSequence: Promise<void> = Promise.resolve();
 
   const loadTree = async () => {
@@ -51,14 +52,25 @@ export function createDocsEffect(
       return;
     }
     await flushSave();
-    useDocsStore.getState().setLoading();
+
+    // 时序守卫：慢响应的旧请求不得覆盖后打开的新文档。
+    nodeSequence += 1;
+    const sequence = nodeSequence;
+    useDocsStore.getState().setNodeLoading();
+
     try {
       const node = await model.getNode(id);
+      if (sequence !== nodeSequence) {
+        return;
+      }
       useDocsStore.getState().setActiveNode(node);
     } catch (error) {
+      if (sequence !== nodeSequence) {
+        return;
+      }
       const message = messageOf(error);
       useDocsStore.getState().clearActiveNode();
-      useDocsStore.getState().setError(message);
+      useDocsStore.getState().setNodeError(message);
       notify.error(message);
     }
   };

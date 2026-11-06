@@ -24,8 +24,8 @@ export default function DocPage() {
   const activeNode = useDocsStore((state) => state.activeNode);
   const draftTitle = useDocsStore((state) => state.draftTitle);
   const saveStatus = useDocsStore((state) => state.saveStatus);
-  const phase = useDocsStore((state) => state.phase);
-  const errorMessage = useDocsStore((state) => state.errorMessage);
+  const nodePhase = useDocsStore((state) => state.nodePhase);
+  const nodeErrorMessage = useDocsStore((state) => state.nodeErrorMessage);
 
   useEffect(() => {
     if (nodeId) {
@@ -102,20 +102,36 @@ export default function DocPage() {
     downloadMarkdown(state.draftTitle, state.draftContent);
   };
 
-  if (phase === "loading" && !activeNode) {
+  // 切换文档时也走骨架屏：旧内容属于上一篇文档，不能继续显示。
+  if (nodeId && nodePhase === "loading") {
     return (
-      <div className="mx-auto w-full max-w-3xl px-6 py-10">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="mt-6 h-4 w-full" />
-        <Skeleton className="mt-3 h-4 w-5/6" />
-      </div>
+      <section
+        aria-busy="true"
+        aria-label="正在加载文档"
+        className="flex h-full min-w-0 flex-col bg-surface"
+      >
+        <header className="flex items-center gap-3 border-b border-border px-6 py-4">
+          <Skeleton className="h-7 w-56" />
+          <Skeleton className="ml-auto h-5 w-16" />
+        </header>
+        <div className="min-h-0 flex-1 overflow-hidden px-6 py-6">
+          <div className="mx-auto w-full max-w-3xl space-y-3">
+            <Skeleton className="h-7 w-2/5" />
+            <Skeleton className="mt-6 h-4 w-full" />
+            <Skeleton className="h-4 w-11/12" />
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="mt-6 h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+        </div>
+      </section>
     );
   }
 
-  if (errorMessage && !activeNode) {
+  if (nodeErrorMessage && !activeNode) {
     return (
       <div className="mx-auto w-full max-w-3xl px-6 py-10">
-        <p className="text-sm text-textPrimary">{errorMessage}</p>
+        <p className="text-sm text-textPrimary">{nodeErrorMessage}</p>
         <Button
           className="mt-4"
           variant="outline"

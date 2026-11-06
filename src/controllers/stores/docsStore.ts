@@ -8,6 +8,7 @@ import type {
 export type DocsPhase = "idle" | "loading" | "ready" | "error";
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 export type SearchPhase = "idle" | "loading" | "ready" | "error";
+export type NodePhase = "idle" | "loading" | "ready" | "error";
 
 type DocsState = {
   nodes: DocNodeSummary[];
@@ -16,8 +17,12 @@ type DocsState = {
   draftTitle: string;
   draftContent: string;
   saveStatus: SaveStatus;
+  /** 目录树加载状态，与当前文档的加载状态相互独立。 */
   phase: DocsPhase;
   errorMessage: string | null;
+  /** 当前文档加载状态；切换文档时用它驱动骨架屏。 */
+  nodePhase: NodePhase;
+  nodeErrorMessage: string | null;
   searchQuery: string;
   searchResults: DocSearchHit[];
   searchPhase: SearchPhase;
@@ -28,6 +33,8 @@ type DocsActions = {
   setLoading: () => void;
   setTree: (nodes: DocNodeSummary[]) => void;
   setError: (message: string) => void;
+  setNodeLoading: () => void;
+  setNodeError: (message: string) => void;
   setActiveNode: (node: DocNode) => void;
   clearActiveNode: () => void;
   setDraftTitle: (title: string) => void;
@@ -54,6 +61,8 @@ const initialDocsData: DocsState = {
   saveStatus: "idle",
   phase: "idle",
   errorMessage: null,
+  nodePhase: "idle",
+  nodeErrorMessage: null,
   searchQuery: "",
   searchResults: [],
   searchPhase: "idle",
@@ -65,6 +74,9 @@ export const useDocsStore = create<DocsStore>()((set) => ({
   setLoading: () => set({ phase: "loading", errorMessage: null }),
   setTree: (nodes) => set({ nodes, phase: "ready", errorMessage: null }),
   setError: (errorMessage) => set({ phase: "error", errorMessage }),
+  setNodeLoading: () => set({ nodePhase: "loading", nodeErrorMessage: null }),
+  setNodeError: (nodeErrorMessage) =>
+    set({ nodePhase: "error", nodeErrorMessage }),
   setActiveNode: (node) =>
     set({
       activeNodeId: node.id,
@@ -72,8 +84,8 @@ export const useDocsStore = create<DocsStore>()((set) => ({
       draftTitle: node.title,
       draftContent: node.content,
       saveStatus: "idle",
-      phase: "ready",
-      errorMessage: null,
+      nodePhase: "ready",
+      nodeErrorMessage: null,
     }),
   clearActiveNode: () =>
     set({
@@ -82,6 +94,8 @@ export const useDocsStore = create<DocsStore>()((set) => ({
       draftTitle: "",
       draftContent: "",
       saveStatus: "idle",
+      nodePhase: "idle",
+      nodeErrorMessage: null,
     }),
   setDraftTitle: (draftTitle) => set({ draftTitle }),
   setDraftContent: (draftContent) => set({ draftContent }),
