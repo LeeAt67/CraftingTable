@@ -202,17 +202,20 @@ func freePort(t *testing.T) int {
 
 func isolatedEnvironment(overrides map[string]string) []string {
 	blocked := map[string]struct{}{
-		"API_PORT":                          {},
-		"CRAFTINGTABLE_DATABASE_PATH":       {},
-		"LEEAT_DATABASE_PATH":               {},
-		"AGENT_API_BASE_URL":                {},
-		"AGENT_API_KEY":                     {},
-		"AGENT_MODEL":                       {},
-		"CRAFTINGTABLE_AGENT_BASE_URL":      {},
-		"CRAFTINGTABLE_AGENT_API_KEY":       {},
-		"CRAFTINGTABLE_AGENT_MODEL":         {},
-		"CRAFTINGTABLE_AGENT_SYSTEM_PROMPT": {},
-		"CRAFTINGTABLE_TEST_HOOKS":          {},
+		"API_PORT":                            {},
+		"CRAFTINGTABLE_DATABASE_PATH":         {},
+		"LEEAT_DATABASE_PATH":                 {},
+		"AGENT_API_BASE_URL":                  {},
+		"AGENT_API_KEY":                       {},
+		"AGENT_MODEL":                         {},
+		"CRAFTINGTABLE_AGENT_BASE_URL":        {},
+		"CRAFTINGTABLE_AGENT_API_KEY":         {},
+		"CRAFTINGTABLE_AGENT_MODEL":           {},
+		"CRAFTINGTABLE_AGENT_SYSTEM_PROMPT":   {},
+		"CRAFTINGTABLE_AGENT_TOOLS_ENABLED":   {},
+		"CRAFTINGTABLE_AGENT_MAX_MODEL_STEPS": {},
+		"CRAFTINGTABLE_AGENT_MAX_TOOL_CALLS":  {},
+		"CRAFTINGTABLE_TEST_HOOKS":            {},
 	}
 	environment := make([]string, 0, len(os.Environ())+len(overrides))
 	for _, value := range os.Environ() {

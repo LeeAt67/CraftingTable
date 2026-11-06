@@ -201,6 +201,16 @@ export async function consumeAgentRun(
       });
       for await (const event of readAgentStream(body)) {
         cursor = Math.max(cursor, event.cursor);
+        if (event.type === "reasoning-start") {
+          input.handlers.onSnapshot(input.materializer.reasoningStart());
+          continue;
+        }
+        if (event.type === "reasoning-delta") {
+          input.handlers.onSnapshot(
+            input.materializer.reasoningDelta(event.delta, event.cursor),
+          );
+          continue;
+        }
         if (event.type === "text-delta") {
           input.handlers.onSnapshot(
             input.materializer.delta(event.delta, event.cursor),
@@ -215,6 +225,9 @@ export async function consumeAgentRun(
             ),
           );
           return [null, event.error];
+        }
+        if (event.type !== "finish") {
+          continue;
         }
         if (!event.status || !isRunStatus(event.status)) {
           const error: AgentError = {

@@ -70,6 +70,12 @@ func uiPartFromStreamChunk(chunk core.StreamChunk) uiMessageStreamPart {
 		}
 	case core.StreamStartStep:
 		return uiStartStepPart{}
+	case core.StreamReasoningStart:
+		return uiReasoningStartPart{ID: chunk.PartID}
+	case core.StreamReasoningDelta:
+		return uiReasoningDeltaPart{ID: chunk.PartID, Delta: chunk.Text}
+	case core.StreamReasoningEnd:
+		return uiReasoningEndPart{ID: chunk.PartID}
 	case core.StreamTextStart:
 		return uiTextStartPart{ID: chunk.PartID}
 	case core.StreamTextDelta:

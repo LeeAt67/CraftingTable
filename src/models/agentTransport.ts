@@ -25,6 +25,7 @@ const runHandleSchema = z.object({
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
   assistantPartId: z.string().min(1),
+  reasoningPartId: z.string().min(1).optional(),
   status: z.enum(["running", "completed", "failed", "cancelled", "interrupted"]),
 });
 

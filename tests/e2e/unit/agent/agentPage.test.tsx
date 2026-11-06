@@ -78,4 +78,32 @@ describe("AgentPage", () => {
     expect(screen.getAllByText("模型服务请求失败")).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "重试" })).toHaveLength(1);
   });
+
+  it("disables the composer while another session is streaming", () => {
+    useAgentStore.getState().upsertSession({
+      id: "session-b",
+      title: "新会话",
+      createdAt: "2026-11-05T00:00:00.000Z",
+      updatedAt: "2026-11-05T00:00:01.000Z",
+    });
+    useAgentStore.getState().setActiveSession("session-b");
+    useAgentStore.getState().setLiveRun({
+      sessionId: "session-a",
+      runId: "run-a",
+    });
+    useAgentStore.getState().setSendPhase("streaming");
+
+    render(
+      <MemoryRouter initialEntries={["/agent/session-b"]}>
+        <Routes>
+          <Route path="/agent/:sessionId" element={<AgentPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole("textbox", { name: "发送给 Agent" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "发送" })).toBeDisabled();
+  });
 });

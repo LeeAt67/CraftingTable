@@ -20,8 +20,9 @@ const (
 type PartType string
 
 const (
-	PartText  PartType = "text"
-	PartError PartType = "error"
+	PartText      PartType = "text"
+	PartReasoning PartType = "reasoning"
+	PartError     PartType = "error"
 )
 
 type PartStatus string

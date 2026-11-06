@@ -19,6 +19,19 @@ const startPartSchema = z.object({
 });
 
 const startStepPartSchema = z.object({ type: z.literal("start-step") });
+const reasoningStartPartSchema = z.object({
+  type: z.literal("reasoning-start"),
+  id: z.string().min(1),
+});
+const reasoningDeltaPartSchema = z.object({
+  type: z.literal("reasoning-delta"),
+  id: z.string().min(1),
+  delta: z.string(),
+});
+const reasoningEndPartSchema = z.object({
+  type: z.literal("reasoning-end"),
+  id: z.string().min(1),
+});
 const textStartPartSchema = z.object({
   type: z.literal("text-start"),
   id: z.string().min(1),
@@ -52,6 +65,9 @@ const errorPartSchema = z.object({
 const streamPartSchema = z.discriminatedUnion("type", [
   startPartSchema,
   startStepPartSchema,
+  reasoningStartPartSchema,
+  reasoningDeltaPartSchema,
+  reasoningEndPartSchema,
   textStartPartSchema,
   textDeltaPartSchema,
   textEndPartSchema,
@@ -63,6 +79,9 @@ const streamPartSchema = z.discriminatedUnion("type", [
 const knownPartTypes = new Set([
   "start",
   "start-step",
+  "reasoning-start",
+  "reasoning-delta",
+  "reasoning-end",
   "text-start",
   "text-delta",
   "text-end",
@@ -74,6 +93,8 @@ const knownPartTypes = new Set([
 export type AgentStreamPart = z.infer<typeof streamPartSchema>;
 
 export type AgentStreamEvent =
+  | { type: "reasoning-start"; id: string; cursor: number }
+  | { type: "reasoning-delta"; id: string; delta: string; cursor: number }
   | { type: "text-delta"; id: string; delta: string; cursor: number }
   | {
       type: "finish";

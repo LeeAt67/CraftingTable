@@ -234,6 +234,10 @@ func (s *SQLiteStore) CreateAgentSendRun(
 		if err != nil {
 			return fmt.Errorf("create run id: %w", err)
 		}
+		reasoningPartID, err := newID()
+		if err != nil {
+			return fmt.Errorf("create reasoning part id: %w", err)
+		}
 		assistantPartID, err := newID()
 		if err != nil {
 			return fmt.Errorf("create assistant part id: %w", err)
@@ -307,19 +311,30 @@ func (s *SQLiteStore) CreateAgentSendRun(
 		); err != nil {
 			return fmt.Errorf("insert agent run: %w", err)
 		}
-		if _, err := tx.ExecContext(
-			ctx,
-			`INSERT INTO agent_message_parts (
-			  id, message_id, run_id, part_index, type, status, text_content,
-			  created_at, updated_at
-			) VALUES (?, ?, ?, 0, 'text', 'streaming', '', ?, ?)`,
-			assistantPartID,
-			assistantMessageID,
-			runID,
-			now,
-			now,
-		); err != nil {
-			return fmt.Errorf("insert assistant message part: %w", err)
+		for _, part := range []struct {
+			id    string
+			index int
+			kind  domain.PartType
+		}{
+			{reasoningPartID, 0, domain.PartReasoning},
+			{assistantPartID, 1, domain.PartText},
+		} {
+			if _, err := tx.ExecContext(
+				ctx,
+				`INSERT INTO agent_message_parts (
+				  id, message_id, run_id, part_index, type, status, text_content,
+				  created_at, updated_at
+				) VALUES (?, ?, ?, ?, ?, 'streaming', '', ?, ?)`,
+				part.id,
+				assistantMessageID,
+				runID,
+				part.index,
+				part.kind,
+				now,
+				now,
+			); err != nil {
+				return fmt.Errorf("insert assistant message part: %w", err)
+			}
 		}
 		if _, err := tx.ExecContext(
 			ctx,
@@ -439,6 +454,10 @@ func (s *SQLiteStore) CreateAgentRetryRun(
 		if err != nil {
 			return fmt.Errorf("create retry run id: %w", err)
 		}
+		reasoningPartID, err := newID()
+		if err != nil {
+			return fmt.Errorf("create retry reasoning part id: %w", err)
+		}
 		partID, err := newID()
 		if err != nil {
 			return fmt.Errorf("create retry part id: %w", err)
@@ -462,19 +481,30 @@ func (s *SQLiteStore) CreateAgentRetryRun(
 		); err != nil {
 			return fmt.Errorf("insert retry run: %w", err)
 		}
-		if _, err := tx.ExecContext(
-			ctx,
-			`INSERT INTO agent_message_parts (
-			  id, message_id, run_id, part_index, type, status, text_content,
-			  created_at, updated_at
-			) VALUES (?, ?, ?, 0, 'text', 'streaming', '', ?, ?)`,
-			partID,
-			input.AssistantMessageID,
-			runID,
-			now,
-			now,
-		); err != nil {
-			return fmt.Errorf("insert retry part: %w", err)
+		for _, part := range []struct {
+			id    string
+			index int
+			kind  domain.PartType
+		}{
+			{reasoningPartID, 0, domain.PartReasoning},
+			{partID, 1, domain.PartText},
+		} {
+			if _, err := tx.ExecContext(
+				ctx,
+				`INSERT INTO agent_message_parts (
+				  id, message_id, run_id, part_index, type, status, text_content,
+				  created_at, updated_at
+				) VALUES (?, ?, ?, ?, ?, 'streaming', '', ?, ?)`,
+				part.id,
+				input.AssistantMessageID,
+				runID,
+				part.index,
+				part.kind,
+				now,
+				now,
+			); err != nil {
+				return fmt.Errorf("insert retry part: %w", err)
+			}
 		}
 		if _, err := tx.ExecContext(
 			ctx,
@@ -548,7 +578,6 @@ func (s *SQLiteStore) FinalizeAgentRun(
 			assistantMessageID string
 			status             domain.RunStatus
 			nextSequence       int
-			stepID             string
 			partMessageID      string
 		)
 		err := tx.QueryRowContext(
@@ -600,6 +629,46 @@ func (s *SQLiteStore) FinalizeAgentRun(
 		); err != nil {
 			return fmt.Errorf("finalize assistant part: %w", err)
 		}
+		if input.ReasoningPartID != "" {
+			var reasoningMessageID string
+			err = tx.QueryRowContext(
+				ctx,
+				`SELECT message_id FROM agent_message_parts
+				 WHERE id = ? AND run_id = ? AND type = 'reasoning'`,
+				input.ReasoningPartID,
+				input.RunID,
+			).Scan(&reasoningMessageID)
+			if errors.Is(err, sql.ErrNoRows) {
+				return core.ErrRunNotFound
+			}
+			if err != nil {
+				return fmt.Errorf("load reasoning part: %w", err)
+			}
+			if reasoningMessageID != assistantMessageID {
+				return core.ErrRunNotFound
+			}
+		}
+		if strings.TrimSpace(input.ReasoningText) == "" {
+			if _, err := tx.ExecContext(
+				ctx,
+				`DELETE FROM agent_message_parts
+				 WHERE run_id = ? AND type = 'reasoning'`,
+				input.RunID,
+			); err != nil {
+				return fmt.Errorf("delete empty reasoning part: %w", err)
+			}
+		} else if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE agent_message_parts
+			 SET text_content = ?, status = ?, updated_at = ?
+			 WHERE run_id = ? AND type = 'reasoning'`,
+			input.ReasoningText,
+			input.PartStatus,
+			now,
+			input.RunID,
+		); err != nil {
+			return fmt.Errorf("finalize reasoning part: %w", err)
+		}
 		if input.AgentError != nil {
 			if err := ensureErrorPart(
 				ctx,
@@ -634,23 +703,16 @@ func (s *SQLiteStore) FinalizeAgentRun(
 		); err != nil {
 			return fmt.Errorf("finalize agent run: %w", err)
 		}
-		stepStatus := string(input.Status)
-		if err := tx.QueryRowContext(
+		if _, err := tx.ExecContext(
 			ctx,
-			`SELECT id FROM agent_steps WHERE run_id = ? AND step_index = 0`,
+			`UPDATE agent_steps
+			 SET status = ?, finished_at = ?
+			 WHERE run_id = ? AND status = 'running'`,
+			string(input.Status),
+			now,
 			input.RunID,
-		).Scan(&stepID); err == nil {
-			if _, err := tx.ExecContext(
-				ctx,
-				`UPDATE agent_steps SET status = ?, finished_at = ? WHERE id = ?`,
-				stepStatus,
-				now,
-				stepID,
-			); err != nil {
-				return fmt.Errorf("finalize agent step: %w", err)
-			}
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("load agent step: %w", err)
+		); err != nil {
+			return fmt.Errorf("finalize agent steps: %w", err)
 		}
 		if terminalEventType == "" {
 			terminalEventType = terminalEventForStatus(input.Status)
@@ -750,6 +812,26 @@ func (s *SQLiteStore) InterruptAgentRun(
 			input.RunID,
 		); err != nil {
 			return fmt.Errorf("interrupt assistant part: %w", err)
+		}
+		if strings.TrimSpace(input.ReasoningText) == "" {
+			if _, err := tx.ExecContext(
+				ctx,
+				`DELETE FROM agent_message_parts
+				 WHERE run_id = ? AND type = 'reasoning'`,
+				input.RunID,
+			); err != nil {
+				return fmt.Errorf("delete empty reasoning part: %w", err)
+			}
+		} else if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE agent_message_parts
+			 SET text_content = ?, status = 'interrupted', updated_at = ?
+			 WHERE run_id = ? AND type = 'reasoning'`,
+			input.ReasoningText,
+			now,
+			input.RunID,
+		); err != nil {
+			return fmt.Errorf("interrupt reasoning part: %w", err)
 		}
 		if _, err := tx.ExecContext(
 			ctx,
@@ -965,6 +1047,14 @@ func (s *SQLiteStore) RecoverInterruptedAgentRuns(
 			}
 			if _, err := tx.ExecContext(
 				ctx,
+				`DELETE FROM agent_message_parts
+				 WHERE run_id = ? AND type = 'reasoning' AND text_content = ''`,
+				run.id,
+			); err != nil {
+				return fmt.Errorf("delete empty reasoning part: %w", err)
+			}
+			if _, err := tx.ExecContext(
+				ctx,
 				`UPDATE agent_steps SET status = 'interrupted', finished_at = ?
 				 WHERE run_id = ? AND status = 'running'`,
 				now,
@@ -977,7 +1067,7 @@ func (s *SQLiteStore) RecoverInterruptedAgentRuns(
 				ctx,
 				`SELECT text_content
 				 FROM agent_message_parts
-				 WHERE run_id = ? AND type = 'text' AND part_index = 0`,
+				 WHERE run_id = ? AND type = 'text'`,
 				run.id,
 			).Scan(&assistantText); err != nil {
 				return fmt.Errorf("load interrupted assistant text: %w", err)
@@ -1044,16 +1134,38 @@ func (s *SQLiteStore) getRunExecution(
 	if err != nil {
 		return domain.RunExecution{}, err
 	}
-	var assistantPartID string
+	var (
+		assistantPartID string
+		reasoningPartID string
+	)
 	err = s.db.QueryRowContext(
 		ctx,
 		`SELECT id FROM agent_message_parts
-		 WHERE message_id = ? AND run_id = ? AND type = 'text' AND part_index = 0`,
+		 WHERE message_id = ? AND run_id = ? AND type = 'text'`,
 		run.AssistantMessageID,
 		run.ID,
 	).Scan(&assistantPartID)
 	if err != nil {
 		return domain.RunExecution{}, fmt.Errorf("load run assistant part: %w", err)
+	}
+	err = s.db.QueryRowContext(
+		ctx,
+		`SELECT id FROM agent_message_parts
+		 WHERE message_id = ? AND run_id = ? AND type = 'reasoning'`,
+		run.AssistantMessageID,
+		run.ID,
+	).Scan(&reasoningPartID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return domain.RunExecution{}, fmt.Errorf("load run reasoning part: %w", err)
+	}
+	var modelStepID string
+	if err := s.db.QueryRowContext(
+		ctx,
+		`SELECT id FROM agent_steps
+		 WHERE run_id = ? AND step_index = 0 AND kind = 'model'`,
+		run.ID,
+	).Scan(&modelStepID); err != nil {
+		return domain.RunExecution{}, fmt.Errorf("load run model step: %w", err)
 	}
 	detail, err := s.GetAgentSession(ctx, run.SessionID)
 	if err != nil {
@@ -1061,7 +1173,9 @@ func (s *SQLiteStore) getRunExecution(
 	}
 	return domain.RunExecution{
 		Run:             run,
+		ModelStepID:     modelStepID,
 		AssistantPartID: assistantPartID,
+		ReasoningPartID: reasoningPartID,
 		Messages: contextMessages(
 			run,
 			detail.Messages,

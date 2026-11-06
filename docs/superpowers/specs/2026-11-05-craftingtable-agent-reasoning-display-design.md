@@ -1,6 +1,6 @@
 # CraftingTable Agent Reasoning Display Design
 
-- **Status:** Draft for review
+- **Status:** Implemented on 2026-11-05
 - **Date:** 2026-11-05
 - **Scope:** 上游模型 reasoning 内容的流式接收、持久化、恢复和折叠展示
 - **Depends on:** [Agent 设计](./2026-11-05-craftingtable-agent-design.md)、[持久化与恢复设计](./2026-11-05-craftingtable-agent-persistence-recovery-design.md)
@@ -30,11 +30,13 @@ assistant message
 
 - reasoning 与最终正文分别持久化。
 - 页面刷新和重新打开会话后，reasoning 仍可查看。
-- 推理进行中默认展开，正文开始后自动折叠。
+- reasoning 进行中默认展开，正文开始后自动折叠。
 - 用户手动切换后，不再被自动折叠规则覆盖。
-- 重新加载页面后默认折叠。
+- 页面刷新或重新打开会话后默认折叠。
+- 面板标题固定为 `Reasoning`。
+- 不显示 Brain 图标，不显示计时器、耗时、token 或 usage。
 - reasoning 默认不进入下一轮模型上下文。
-- 本次只识别当前上游的 `reasoning_content`，不在服务端增加多供应商兼容层。
+- 本次只识别当前上游的 `reasoning_content`，不增加多供应商兼容层。
 - 本次以纯文本展示 reasoning，Markdown 渲染留作后续 TODO。
 
 ## 2. 当前问题
@@ -76,11 +78,14 @@ assistant message
 
 - 不实现 OpenAI、Anthropic、Gemini、DeepSeek 等多供应商 reasoning 适配。
 - 不兼容 `delta.reasoning` 或其他供应商字段别名。
+- 不解析、不持久化、不展示 usage、reasoning token、耗时或成本。
+- 不显示 reasoning 面板计时器。
 - 不保存或处理 provider reasoning signature、encrypted content 或其他元数据。
-- 不展示 reasoning token 数量、成本或推理预算。
+- 不增加多个 reasoning block。
 - 不把 reasoning 注入后续模型上下文。
 - 不在本次实现 reasoning Markdown 渲染。
 - 不改变 Provider 请求参数，不增加 thinking 开关。
+- 不改变现有 Provider Parser 对 `finish_reason` 和 `[DONE]` 的处理方式。
 - 不承诺服务端进程重启后恢复未提交的 reasoning，边界与正文一致。
 
 ## 6. 方案对比
@@ -150,7 +155,9 @@ Provider Stream Parser
       |
       v
 Run Coordinator
+  StreamReasoningStart
   StreamReasoningDelta
+  StreamReasoningEnd
   StreamTextDelta
       |
       v
@@ -192,6 +199,7 @@ error
 ```
 
 Reasoning 内容复用 `text_content` 字段保存。`error_json` 只用于 error Part。
+本阶段不新增 metadata 字段。
 
 ### 8.2 Run 创建
 
@@ -208,9 +216,11 @@ text:      1
 error:     后续可用索引
 ```
 
-`AssistantPartID` 保持现有 API 字段名，避免破坏调用方。`ReasoningPartID` 新增为可选字段。
+`AssistantPartID` 保持现有 API 字段名，避免破坏调用方。`ReasoningPartID`
+新增为可选字段。
 
-若 Run 结束时 reasoning 内容为空，删除为空创建的 reasoning Part。正文和错误 Part 保留。
+若 Run 结束时 reasoning 内容为空，删除为空创建的 reasoning Part。正文和错误
+Part 保留。
 
 ### 8.3 Run 执行与 Handle
 
@@ -242,9 +252,13 @@ Finalize 在现有事务中：
 
 Reasoning 和正文共享同一个终态与事务，不分别提交。
 
+`InterruptRunRecord` 同样增加 `ReasoningPartID` 和 `ReasoningText`。取消、失败、
+中断、Finalize 重试和启动失败回退都必须同步 settling 已存在的 reasoning Part。
+
 ### 8.5 Context Messages
 
-构造模型上下文时只读取 `PartText`。`PartReasoning` 不进入 `ProviderMessage`。
+构造模型上下文时只读取 `PartText`。`PartReasoning` 不进入
+`ProviderMessage`。
 
 ## 9. SQLite 迁移
 
@@ -276,7 +290,7 @@ SQLite 需要重建 `agent_message_parts`：
 
 ### 10.1 Provider Parser
 
-本次只读取：
+本次只增加：
 
 ```json
 {
@@ -297,6 +311,8 @@ reasoning
 ```
 
 空字符串不产生事件。不增加 `reasoning` 字段别名。
+
+本次不读取 usage，也不改变 `finish_reason` 收到后结束解析的现有行为。
 
 ### 10.2 StreamChunk
 
@@ -319,7 +335,8 @@ Reasoning string
 Text      string
 ```
 
-只有 `StreamReasoningDelta` 追加到 `Reasoning`，只有 `StreamTextDelta` 追加到 `Text`。
+只有 `StreamReasoningDelta` 追加到 `Reasoning`，只有 `StreamTextDelta` 追加到
+`Text`。
 
 ### 10.4 UI Message Stream
 
@@ -335,9 +352,23 @@ JSON 结构：
 
 ```json
 {
+  "type": "reasoning-start",
+  "id": "reasoning-part-id"
+}
+```
+
+```json
+{
   "type": "reasoning-delta",
   "id": "reasoning-part-id",
   "delta": "text"
+}
+```
+
+```json
+{
+  "type": "reasoning-end",
+  "id": "reasoning-part-id"
 }
 ```
 
@@ -381,6 +412,7 @@ finish
 - 第一个非空正文增量前发送 `text-start`。
 - 终态前补齐尚未关闭的 reasoning 或 text。
 - 不发送空的 reasoning-start/end 对。
+- 同一 Run 的任何 reasoning 事件都使用同一个 `ReasoningPartID`。
 
 ## 11. 前端协议与 Materializer
 
@@ -440,11 +472,13 @@ Reducer 将 `reasoning-delta` 转换为：
 `RunMaterializer` 增加：
 
 ```text
+reasoningStart()
 reasoningDelta(text, cursor)
 ```
 
 Materializer 独立维护 reasoning Part 和 text Part：
 
+- 只有 `reasoningStart` 才创建 reasoning Part，避免空面板。
 - `reasoningDelta` 只追加 reasoning 内容。
 - `delta` 只追加正文内容。
 - `finish` 同时更新两个 Part 的状态。
@@ -472,7 +506,8 @@ initialSnapshot
 
 ### 12.2 完成后刷新
 
-Reasoning 和正文从 SQLite 读取。Reasoning Part 按普通 MessagePart 合并到 Zustand。
+Reasoning 和正文从 SQLite 读取。Reasoning Part 按普通 MessagePart 合并到
+Zustand。
 
 ### 12.3 取消、失败和中断
 
@@ -508,10 +543,11 @@ Reasoning 面板位于最终正文上方，与正文属于同一条 assistant Me
 标题固定为：
 
 ```text
-思考中...
+Reasoning
 ```
 
-不使用 Brain 或其他装饰图标。标题右侧只显示折叠箭头：
+不使用 Brain 或其他装饰图标，不显示计时器、耗时或 token。标题右侧只显示折叠
+箭头：
 
 - 折叠时箭头向右。
 - 展开时箭头向下。
@@ -522,8 +558,9 @@ Reasoning 面板位于最终正文上方，与正文属于同一条 assistant Me
 
 - 首次出现真实 reasoning 内容时显示面板。
 - reasoning 流式阶段默认展开。
-- 第一个正文 token 出现时自动折叠。
-- 用户手动切换后，自动规则不再改变其选择。
+- 第一个正文片段出现时自动折叠。
+- 折叠状态实现为 `auto | open | closed`。用户点击后将状态改为 `open` 或
+  `closed`，自动规则不再覆盖。
 - 完成、失败、取消或中断后仍可展开已收到内容。
 - 页面刷新或重新打开会话后默认折叠。
 - 无 reasoning 内容时不显示空面板。
@@ -546,6 +583,14 @@ Reasoning 面板位于最终正文上方，与正文属于同一条 assistant Me
 - reasoning 增量不逐字进入读屏播报。
 - 无正文时读屏状态为“Agent 正在思考”。
 - 正文出现后读屏状态为“Agent 正在回复”。
+
+### 13.6 滚动行为
+
+- 外层消息列表只在更新前用户位于接近底部时调用 `scrollIntoView`。
+- 用户主动向上翻阅后，新的 reasoning 或正文增量不得把视图强行拉回底部。
+- reasoning 内容区维护独立滚动位置，仅在用户位于其底部时跟随最新内容。
+- 用户主动上滑后暂停 reasoning 内部自动跟随；用户回到底部后恢复。
+- 折叠或展开不得抢夺输入框焦点，也不得重置外层会话滚动位置。
 
 ## 14. 错误处理与隐私
 
@@ -581,19 +626,23 @@ Reasoning 面板位于最终正文上方，与正文属于同一条 assistant Me
 - Materializer 分别追加 reasoning 与正文。
 - 从 Snapshot 恢复 reasoning Part。
 - Part 状态在终态同步更新。
+- 标题固定为 `Reasoning`，不依赖时间或 token 数据。
+- 折叠状态遵守 `auto | open | closed`，手动选择后不被自动规则覆盖。
+- 消息列表和 reasoning 内容区都只在接近底部时自动跟随。
 
 ### 15.3 浏览器
 
 桌面和移动端覆盖：
 
-1. 收到 reasoning 后显示“思考中...”。
+1. 收到 reasoning 后显示固定标题 `Reasoning`。
 2. 推理阶段默认展开。
 3. 正文出现后自动折叠。
 4. 点击标题重新展开。
-5. 用户展开后不被再次自动折叠。
+5. 用户展开或关闭后不被再次自动折叠。
 6. 刷新后 reasoning 保留且默认折叠。
 7. 重新打开旧会话可展开 reasoning。
 8. 无 reasoning 时不显示面板。
+9. 用户上翻消息列表或 reasoning 内容区时不被强制拉回底部。
 
 自动化测试使用 mock SSE，不依赖真实 API Key。实现完成后使用当前配置的上游模型做一次人工联调。
 
@@ -604,8 +653,12 @@ Reasoning 面板位于最终正文上方，与正文属于同一条 assistant Me
 - 生成中刷新后可以继续看到 reasoning。
 - 完成后刷新仍可查看 reasoning。
 - 无 reasoning 的 Run 不出现空折叠面板。
+- reasoning 面板标题始终为 `Reasoning`。
+- 不显示计时器、耗时、token、usage 或 Brain 图标。
+- 不新增 reasoning metadata 字段或 metadata 流事件。
 - reasoning 不进入后续模型上下文。
 - 折叠交互支持键盘和读屏。
+- 主动上翻的用户不会被流式更新强制拉回底部。
 - 旧会话、旧数据和现有恢复测试不回归。
 - `typecheck`、前端测试、Go 测试、迁移测试、构建和相关 E2E 全部通过。
 
@@ -620,4 +673,9 @@ CraftingTable 统一 reasoning 协议，不接触供应商原始字段。
 ```text
 TODO: reasoning 内容后续支持 Markdown 渲染，包括标题、列表、
 代码块等格式。本次按纯文本展示并保留换行。
+```
+
+```text
+TODO: reasoning 耗时和 usage token 展示后续重新设计。本次不解析
+usage、不持久化这些指标，也不增加面板计时器。
 ```

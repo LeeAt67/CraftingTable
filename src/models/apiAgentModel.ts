@@ -57,6 +57,7 @@ function materializerFromHandle(handle: AgentRunHandle): RunMaterializer {
     userMessageId: handle.userMessageId,
     assistantMessageId: handle.assistantMessageId,
     assistantPartId: handle.assistantPartId,
+    reasoningPartId: handle.reasoningPartId,
   });
 }
 
@@ -65,12 +66,16 @@ function materializerFromSnapshot(
   snapshot: AgentMessageSnapshot,
 ): RunMaterializer {
   const textPart = snapshot.parts.find((part) => part.type === "text");
+  const reasoningPart = snapshot.parts.find(
+    (part) => part.type === "reasoning",
+  );
   return createAgentRunMaterializer({
     sessionId: snapshot.message.sessionId,
     runId,
     userMessageId: snapshot.message.userMessageId ?? "",
     assistantMessageId: snapshot.message.id,
     assistantPartId: textPart?.id ?? "",
+    reasoningPartId: reasoningPart?.id,
     initialSnapshot: snapshot,
   });
 }

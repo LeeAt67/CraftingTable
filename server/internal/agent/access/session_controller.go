@@ -258,7 +258,7 @@ type messagePartResponse struct {
 
 type messagePartContent struct {
 	Type  domain.PartType `json:"type"`
-	Text  string          `json:"text,omitempty"`
+	Text  string          `json:"text"`
 	Error *domain.Error   `json:"error,omitempty"`
 }
 

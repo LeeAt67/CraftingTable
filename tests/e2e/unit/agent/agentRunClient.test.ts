@@ -526,4 +526,63 @@ describe("AgentRunClient", () => {
     expect(error?.code).toBe("AGENT_RUN_INTERRUPTED");
     expect(snapshots).toEqual([]);
   });
+
+  it("forwards reasoning deltas to the reasoning part only", async () => {
+    const snapshots: Array<{ reasoning: string; text: string }> = [];
+    const input = baseInput(() =>
+      Promise.resolve(
+        streamResponse([
+          startFrame(1),
+          `id: 2\ndata: ${JSON.stringify({
+            type: "reasoning-start",
+            id: "reasoning-1",
+          })}\n\n`,
+          `id: 3\ndata: ${JSON.stringify({
+            type: "reasoning-delta",
+            id: "reasoning-1",
+            delta: "先分析",
+          })}\n\n`,
+          `id: 4\ndata: ${JSON.stringify({
+            type: "reasoning-end",
+            id: "reasoning-1",
+          })}\n\n`,
+          `id: 5\ndata: ${JSON.stringify({
+            type: "text-start",
+            id: "part-1",
+          })}\n\n`,
+          textFrame(6, "最终回答"),
+          finishFrame(7),
+          "data: [DONE]\n\n",
+        ]),
+      ),
+    );
+    input.materializer = createAgentRunMaterializer({
+      sessionId: "session-1",
+      runId: "run-1",
+      userMessageId: "user-1",
+      assistantMessageId: "assistant-1",
+      assistantPartId: "part-1",
+      reasoningPartId: "reasoning-1",
+    });
+    input.handlers.onSnapshot = (snapshot) => {
+      snapshots.push({
+        reasoning: snapshot.parts
+          .filter((part) => part.type === "reasoning")
+          .map((part) => part.content.text)
+          .join(""),
+        text: snapshot.parts
+          .filter((part) => part.type === "text")
+          .map((part) => part.content.text)
+          .join(""),
+      });
+    };
+
+    const [, error] = await consumeAgentRun(input);
+
+    expect(error).toBeNull();
+    expect(snapshots.at(-1)).toEqual({
+      reasoning: "先分析",
+      text: "最终回答",
+    });
+  });
 });

@@ -25,4 +25,27 @@ describe("agentStreamSchema", () => {
       retryable: false,
     });
   });
+
+  it("accepts reasoning chunks from the server protocol", () => {
+    const [started, startError] = parseAgentStreamPart({
+      type: "reasoning-start",
+      id: "reasoning-1",
+    });
+    const [delta, deltaError] = parseAgentStreamPart({
+      type: "reasoning-delta",
+      id: "reasoning-1",
+      delta: "先分析",
+    });
+    const [ended, endError] = parseAgentStreamPart({
+      type: "reasoning-end",
+      id: "reasoning-1",
+    });
+
+    expect(startError).toBeNull();
+    expect(deltaError).toBeNull();
+    expect(endError).toBeNull();
+    expect(started?.kind).toBe("known");
+    expect(delta?.kind).toBe("known");
+    expect(ended?.kind).toBe("known");
+  });
 });

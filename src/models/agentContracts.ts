@@ -115,6 +115,11 @@ export type AgentTextPartContent = {
   text: string;
 };
 
+export type AgentReasoningPartContent = {
+  type: "reasoning";
+  text: string;
+};
+
 export type AgentErrorPartContent = {
   type: "error";
   error: AgentError;
@@ -135,12 +140,20 @@ export type AgentTextPart = AgentMessagePartBase & {
   content: AgentTextPartContent;
 };
 
+export type AgentReasoningPart = AgentMessagePartBase & {
+  type: "reasoning";
+  content: AgentReasoningPartContent;
+};
+
 export type AgentErrorPart = AgentMessagePartBase & {
   type: "error";
   content: AgentErrorPartContent;
 };
 
-export type AgentMessagePart = AgentTextPart | AgentErrorPart;
+export type AgentMessagePart =
+  | AgentTextPart
+  | AgentReasoningPart
+  | AgentErrorPart;
 
 export type AgentRunStatus =
   | "running"
@@ -155,6 +168,7 @@ export type AgentRunHandle = {
   userMessageId: string;
   assistantMessageId: string;
   assistantPartId: string;
+  reasoningPartId?: string;
   status: AgentRunStatus;
 };
 

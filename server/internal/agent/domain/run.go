@@ -34,9 +34,32 @@ type ContextMessage struct {
 
 type RunExecution struct {
 	Run             Run
+	ModelStepID     string
 	AssistantPartID string
+	ReasoningPartID string
 	Messages        []ContextMessage
 	Replayed        bool
+}
+
+// StepKind identifies a model or tool step.
+type StepKind string
+
+const (
+	StepModel StepKind = "model"
+	StepTool  StepKind = "tool"
+)
+
+// AgentStep is one durable step in a Run.
+type AgentStep struct {
+	ID           string
+	RunID        string
+	Kind         StepKind
+	ParentStepID *string
+	Index        int
+	Status       string
+	ErrorCode    *string
+	CreatedAt    string
+	FinishedAt   *string
 }
 
 type RunHandle struct {
@@ -45,6 +68,7 @@ type RunHandle struct {
 	UserMessageID      string    `json:"userMessageId"`
 	AssistantMessageID string    `json:"assistantMessageId"`
 	AssistantPartID    string    `json:"assistantPartId"`
+	ReasoningPartID    string    `json:"reasoningPartId,omitempty"`
 	Status             RunStatus `json:"status"`
 }
 

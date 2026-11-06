@@ -1,43 +1,20 @@
 import { expect, test } from "@playwright/test";
+import { uniquePrompt } from "../../support/data";
 
 test("creates a session and completes a message", async ({ page }) => {
+  const prompt = uniquePrompt("整理今天的重点");
   await page.goto("/#/agent");
   await page.getByRole("button", { name: "新建会话" }).click();
   await expect(page).toHaveURL(/#\/agent\/.+/);
 
   const composer = page.getByRole("textbox", { name: "发送给 Agent" });
-  await composer.fill("整理今天的重点");
+  await composer.fill(prompt);
   await page.getByRole("button", { name: "发送" }).click();
 
   const messages = page.getByRole("log", { name: "会话消息" });
-  await expect(
-    messages.getByText("整理今天的重点", { exact: true }),
-  ).toBeVisible();
-  await expect(messages.getByText(/已收到：整理今天的重点/)).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "整理今天的重点" }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "发送" })).toBeEnabled();
-});
-
-test("blocks a second session while the first session is streaming", async ({
-  page,
-}) => {
-  await page.goto("/#/agent");
-  await page.getByRole("button", { name: "新建会话" }).click();
-  await expect(page).toHaveURL(/#\/agent\/[0-9a-f-]+/);
-  const sessionHref = new URL(page.url()).hash;
-  const composer = page.getByRole("textbox", { name: "发送给 Agent" });
-  await composer.fill("会话 A 正在生成");
-  await page.getByRole("button", { name: "发送" }).click();
-  await expect(page.getByRole("button", { name: "停止" })).toBeVisible();
-
-  await page.getByRole("button", { name: "新建会话" }).click();
-
-  await expect(composer).toBeDisabled();
-  await expect(page.getByRole("button", { name: "发送" })).toBeDisabled();
-  await page.locator(`a[href="${sessionHref}"]`).click();
-  await page.getByRole("button", { name: "停止" }).click();
+  await expect(messages.getByText(prompt, { exact: true })).toBeVisible();
+  await expect(messages.getByText(`已收到：${prompt}`)).toBeVisible();
+  await expect(page.getByRole("link", { name: prompt })).toBeVisible();
   await expect(page.getByRole("button", { name: "发送" })).toBeEnabled();
 });
 

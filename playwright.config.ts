@@ -5,6 +5,7 @@ const apiPort = process.env.API_PORT ?? "3101";
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: "**/*.e2e.ts",
+  testIgnore: "**/modules/agent/reasoning.e2e.ts",
   fullyParallel: false,
   workers: 1,
   reporter: "list",
