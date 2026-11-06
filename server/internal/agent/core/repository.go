@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/leeat/craftingtable/server/internal/agent/domain"
@@ -85,6 +86,34 @@ type InterruptRunRecord struct {
 	AgentError      domain.Error
 }
 
+type CreateAgentModelStepRecord struct {
+	RunID string
+}
+
+type CompleteAgentModelStepRecord struct {
+	RunID     string
+	StepID    string
+	Status    string
+	ErrorCode string
+}
+
+type BeginAgentToolCallRecord struct {
+	RunID          string
+	ParentStepID   string
+	ProviderCallID string
+	ToolName       string
+	ToolVersion    string
+	Arguments      json.RawMessage
+	ArgumentsHash  string
+}
+
+type CompleteAgentToolCallRecord struct {
+	RunID        string
+	StepID       string
+	Result       ToolResult
+	EncodedBytes int
+}
+
 type Repository interface {
 	CreateAgentSession(context.Context, CreateSessionRecord) (domain.Session, error)
 	ListAgentSessions(context.Context) ([]domain.Session, error)
@@ -95,4 +124,8 @@ type Repository interface {
 	InterruptAgentRun(context.Context, InterruptRunRecord) error
 	GetAgentRun(context.Context, string) (domain.Run, error)
 	RecoverInterruptedAgentRuns(context.Context) (int, error)
+	CreateAgentModelStep(context.Context, CreateAgentModelStepRecord) (domain.AgentStep, error)
+	CompleteAgentModelStep(context.Context, CompleteAgentModelStepRecord) error
+	CreateAgentToolCall(context.Context, BeginAgentToolCallRecord) (domain.AgentStep, error)
+	CompleteAgentToolCall(context.Context, CompleteAgentToolCallRecord) error
 }

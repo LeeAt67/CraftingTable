@@ -578,7 +578,6 @@ func (s *SQLiteStore) FinalizeAgentRun(
 			assistantMessageID string
 			status             domain.RunStatus
 			nextSequence       int
-			stepID             string
 			partMessageID      string
 		)
 		err := tx.QueryRowContext(
@@ -704,23 +703,16 @@ func (s *SQLiteStore) FinalizeAgentRun(
 		); err != nil {
 			return fmt.Errorf("finalize agent run: %w", err)
 		}
-		stepStatus := string(input.Status)
-		if err := tx.QueryRowContext(
+		if _, err := tx.ExecContext(
 			ctx,
-			`SELECT id FROM agent_steps WHERE run_id = ? AND step_index = 0`,
+			`UPDATE agent_steps
+			 SET status = ?, finished_at = ?
+			 WHERE run_id = ? AND status = 'running'`,
+			string(input.Status),
+			now,
 			input.RunID,
-		).Scan(&stepID); err == nil {
-			if _, err := tx.ExecContext(
-				ctx,
-				`UPDATE agent_steps SET status = ?, finished_at = ? WHERE id = ?`,
-				stepStatus,
-				now,
-				stepID,
-			); err != nil {
-				return fmt.Errorf("finalize agent step: %w", err)
-			}
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("load agent step: %w", err)
+		); err != nil {
+			return fmt.Errorf("finalize agent steps: %w", err)
 		}
 		if terminalEventType == "" {
 			terminalEventType = terminalEventForStatus(input.Status)
@@ -1166,12 +1158,22 @@ func (s *SQLiteStore) getRunExecution(
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return domain.RunExecution{}, fmt.Errorf("load run reasoning part: %w", err)
 	}
+	var modelStepID string
+	if err := s.db.QueryRowContext(
+		ctx,
+		`SELECT id FROM agent_steps
+		 WHERE run_id = ? AND step_index = 0 AND kind = 'model'`,
+		run.ID,
+	).Scan(&modelStepID); err != nil {
+		return domain.RunExecution{}, fmt.Errorf("load run model step: %w", err)
+	}
 	detail, err := s.GetAgentSession(ctx, run.SessionID)
 	if err != nil {
 		return domain.RunExecution{}, err
 	}
 	return domain.RunExecution{
 		Run:             run,
+		ModelStepID:     modelStepID,
 		AssistantPartID: assistantPartID,
 		ReasoningPartID: reasoningPartID,
 		Messages: contextMessages(
