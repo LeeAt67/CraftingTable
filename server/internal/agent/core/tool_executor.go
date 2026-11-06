@@ -56,17 +56,47 @@ func (e *ToolExecutor) Execute(
 
 	toolCtx, cancel := context.WithTimeout(ctx, definition.Timeout)
 	defer cancel()
-	result, handlerErr := invokeToolHandler(toolCtx, registered.Handler, canonical)
+	type handlerOutcome struct {
+		result ToolResult
+		err    error
+	}
+	finished := make(chan handlerOutcome, 1)
+	go func() {
+		result, handlerErr := invokeToolHandler(
+			toolCtx,
+			registered.Handler,
+			canonical,
+		)
+		finished <- handlerOutcome{result: result, err: handlerErr}
+	}()
+
+	var (
+		result     ToolResult
+		handlerErr error
+	)
+	select {
+	case outcome := <-finished:
+		result = outcome.result
+		handlerErr = outcome.err
+	case <-toolCtx.Done():
+		if err := ctx.Err(); err != nil {
+			return ToolResult{}, err
+		}
+		return encodeToolResult(
+			toolErrorResult(call, timeoutToolError()),
+			call,
+			definition.MaxResultBytes,
+		)
+	}
 	if err := ctx.Err(); err != nil {
 		return ToolResult{}, err
 	}
-	if handlerErr != nil {
+	if errors.Is(toolCtx.Err(), context.DeadlineExceeded) {
+		result = toolErrorResult(call, timeoutToolError())
+	} else if handlerErr != nil {
 		var stable ToolError
 		if errors.As(handlerErr, &stable) {
 			result = toolErrorResult(call, &stable)
-		} else if errors.Is(handlerErr, context.DeadlineExceeded) &&
-			errors.Is(toolCtx.Err(), context.DeadlineExceeded) {
-			result = toolErrorResult(call, timeoutToolError())
 		} else {
 			result = toolErrorResult(call, internalToolError())
 		}

@@ -165,6 +165,57 @@ func TestToolExecutorReturnsTimeoutForToolDeadline(t *testing.T) {
 	}
 }
 
+func TestToolExecutorReturnsTimeoutWhenHandlerIgnoresContext(t *testing.T) {
+	t.Parallel()
+
+	release := make(chan struct{})
+	tool := testTool("uncooperative")
+	tool.Definition.Timeout = 10 * time.Millisecond
+	tool.Handler = func(context.Context, json.RawMessage) (ToolResult, error) {
+		<-release
+		return ToolResult{
+			Content: []ToolResultContent{{Type: "text", Text: "too late"}},
+		}, nil
+	}
+	registry, err := NewToolRegistry([]Tool{tool})
+	if err != nil {
+		t.Fatalf("NewToolRegistry() error = %v", err)
+	}
+
+	type outcome struct {
+		result ToolResult
+		err    error
+	}
+	finished := make(chan outcome, 1)
+	go func() {
+		result, executeErr := NewToolExecutor(registry).Execute(
+			context.Background(),
+			ToolCall{
+				Name:      "uncooperative",
+				Version:   "1.0.0",
+				Arguments: json.RawMessage(`{"name":"ok"}`),
+			},
+		)
+		finished <- outcome{result: result, err: executeErr}
+	}()
+
+	select {
+	case received := <-finished:
+		close(release)
+		if received.err != nil {
+			t.Fatalf("Execute() error = %v", received.err)
+		}
+		if !received.result.IsError ||
+			received.result.Error == nil ||
+			received.result.Error.Kind != "timeout" {
+			t.Fatalf("Execute() result = %#v, want timeout", received.result)
+		}
+	case <-time.After(250 * time.Millisecond):
+		close(release)
+		t.Fatal("Execute() waited for a handler that ignored context cancellation")
+	}
+}
+
 func TestToolExecutorTruncatesOversizedResult(t *testing.T) {
 	t.Parallel()
 

@@ -221,7 +221,7 @@ func (s *runStream) chunk(kind StreamChunkKind, partID string) StreamChunk {
 }
 
 func (s *runStream) reasoning(text string) error {
-	if s.execution.ReasoningPartID == "" || text == "" {
+	if s.execution.ReasoningPartID == "" || text == "" || s.reasoningEnded {
 		return nil
 	}
 	if !s.reasoningStarted {
