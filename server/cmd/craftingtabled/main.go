@@ -21,6 +21,7 @@ import (
 	"github.com/leeat/craftingtable/server/internal/agent/access"
 	"github.com/leeat/craftingtable/server/internal/agent/core"
 	"github.com/leeat/craftingtable/server/internal/agent/provider"
+	agenttools "github.com/leeat/craftingtable/server/internal/agent/tools"
 	"github.com/leeat/craftingtable/server/internal/platform/config"
 	"github.com/leeat/craftingtable/server/internal/platform/httpapi"
 	"github.com/leeat/craftingtable/server/internal/platform/store"
@@ -97,7 +98,25 @@ func run() error {
 		streamProvider = provider.NewOpenAICompatible(agentConfig)
 	}
 
-	agentService := core.NewService(sqliteStore, streamProvider, logger)
+	runtimeConfig, err := resolveAgentRuntimeConfig()
+	if err != nil {
+		return err
+	}
+	todayTools, err := agenttools.NewTodayTools(sqliteStore, time.Now)
+	if err != nil {
+		return fmt.Errorf("create agent tools: %w", err)
+	}
+	toolRegistry, err := core.NewToolRegistry(todayTools)
+	if err != nil {
+		return fmt.Errorf("create agent tool registry: %w", err)
+	}
+	agentService := core.NewServiceWithTools(
+		sqliteStore,
+		streamProvider,
+		toolRegistry,
+		logger,
+		runtimeConfig,
+	)
 	if err := agentService.Recover(context.Background()); err != nil {
 		return fmt.Errorf("recover agent runs: %w", err)
 	}
@@ -142,6 +161,9 @@ func run() error {
 			"address", listener.Addr().String(),
 			"database", databasePath,
 			"agent_configured", streamProvider != nil,
+			"agent_tools_enabled", runtimeConfig.ToolsEnabled,
+			"agent_max_model_steps", runtimeConfig.MaxModelSteps,
+			"agent_max_tool_calls", runtimeConfig.MaxToolCalls,
 		)
 		serverErrors <- server.Serve(listener)
 	}()
@@ -244,6 +266,54 @@ func resolveAgentStreamHeartbeat() (time.Duration, error) {
 		)
 	}
 	return interval, nil
+}
+
+func resolveAgentRuntimeConfig() (core.RuntimeConfig, error) {
+	config := core.DefaultRuntimeConfig()
+
+	enabledValue := strings.TrimSpace(
+		os.Getenv("CRAFTINGTABLE_AGENT_TOOLS_ENABLED"),
+	)
+	if enabledValue != "" {
+		enabled, err := strconv.ParseBool(enabledValue)
+		if err != nil {
+			return core.RuntimeConfig{}, fmt.Errorf(
+				"CRAFTINGTABLE_AGENT_TOOLS_ENABLED must be true or false",
+			)
+		}
+		config.ToolsEnabled = enabled
+	}
+
+	maxModelSteps, err := positiveEnvironmentInteger(
+		"CRAFTINGTABLE_AGENT_MAX_MODEL_STEPS",
+		config.MaxModelSteps,
+	)
+	if err != nil {
+		return core.RuntimeConfig{}, err
+	}
+	config.MaxModelSteps = maxModelSteps
+
+	maxToolCalls, err := positiveEnvironmentInteger(
+		"CRAFTINGTABLE_AGENT_MAX_TOOL_CALLS",
+		config.MaxToolCalls,
+	)
+	if err != nil {
+		return core.RuntimeConfig{}, err
+	}
+	config.MaxToolCalls = maxToolCalls
+	return config, nil
+}
+
+func positiveEnvironmentInteger(name string, fallback int) (int, error) {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", name)
+	}
+	return parsed, nil
 }
 
 func firstEnvironment(names ...string) string {

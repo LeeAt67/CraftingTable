@@ -136,8 +136,8 @@
 
 | 编号 | 需求 | 优先级 | 状态 | 调研 / 设计文档 |
 | --- | --- | --- | --- | --- |
-| AG-01 | Tool Registry、工具 Schema、ToolCall / ToolResult 契约与工具执行器 | P0 | 提案 | [调研 §5.3、§6 P0](./research/2026-11-06-general-agent-comparison.md) |
-| AG-02 | 模型与工具之间的多 Step 循环 | P0 | 提案 | [调研 §5.3、§6 P0](./research/2026-11-06-general-agent-comparison.md) |
+| AG-01 | Tool Registry、工具 Schema、ToolCall / ToolResult 契约与工具执行器 | P0 | 已实现 | [通用调研 §5.3、§6 P0](./research/2026-11-06-general-agent-comparison.md)；[深度调研 §1、§5、§10、§13、§16](./research/2026-11-06-ag-01-tool-runtime-deep-dive.md)；[设计](./superpowers/specs/2026-11-06-craftingtable-agent-tool-runtime-design.md)、[计划](./superpowers/plans/2026-11-06-craftingtable-agent-tool-runtime.md) |
+| AG-02 | 模型与工具之间的多 Step 循环 | P0 | 提案 | [调研 §5.3、§6 P0](./research/2026-11-06-general-agent-comparison.md)；AG-01 实施只补最小工具续轮，完整停止预算与失败策略仍待设计 |
 | AG-03 | 工具审批、权限策略、用户确认与暂停后恢复 | P0 | 提案 | [调研 §5.3、§6 P0](./research/2026-11-06-general-agent-comparison.md) |
 | AG-04 | 文件系统、Shell、Workspace、Docker 与远程沙箱 | P0 | 提案 | [调研 §5.3、§6 P0、§6 P1 Workspace](./research/2026-11-06-general-agent-comparison.md) |
 | AG-05 | Step Checkpoint、跨进程接管与持久化执行引擎 | P1 | 提案 | [调研 §5.3、§6 P1](./research/2026-11-06-general-agent-comparison.md)、[Run 恢复 ADR](./architecture/ADR-001-agent-run-recovery.md) |
@@ -191,6 +191,7 @@
 | [今日服务端设计](./superpowers/specs/2026-11-05-craftingtable-today-server-design.md) | 设计 | A-01、A-02、A-03 | 已实现 |
 | [今日服务端实施计划](./superpowers/plans/2026-11-05-craftingtable-today-server.md) | 计划 | A-01、A-02、A-03 | 已交付 |
 | [通用 Agent 调研与当前实现对比](./research/2026-11-06-general-agent-comparison.md) | 调研 | AG-01 至 AG-09 | 调研结论，未进入设计 |
+| [AG-01 工具运行时深度调研](./research/2026-11-06-ag-01-tool-runtime-deep-dive.md) | 调研 | AG-01 | 已实现 |
 | [SQLite 迁移 PostgreSQL 条件调研](./research/2026-11-06-sqlite-to-postgresql-migration-conditions.md) | 调研 | D-01 | 调研结论，当前不迁移 |
 | [Agent 设计](./superpowers/specs/2026-11-05-craftingtable-agent-design.md) | 设计 | AG 系列的现有基线 | 已确认 |
 | [Run 恢复 ADR](./architecture/ADR-001-agent-run-recovery.md) | 决策记录 | AG-05 | 已确认 |
@@ -209,6 +210,7 @@
 - [非 Agent 工作台需求调研](./research/2026-11-05-non-agent-workbench-requirement-research.md)：T / S / N / A / Q 五个域的现状盘点与完整验收标准
 - [今日服务端设计](./superpowers/specs/2026-11-05-craftingtable-today-server-design.md)：A-01 至 A-03 的契约与取舍
 - [通用 Agent 调研](./research/2026-11-06-general-agent-comparison.md)：AG 需求的来源与差距分析
+- [AG-01 工具运行时深度调研](./research/2026-11-06-ag-01-tool-runtime-deep-dive.md)：工具契约、执行、持久化、Provider 映射与首版范围
 - [SQLite 迁移 PostgreSQL 条件调研](./research/2026-11-06-sqlite-to-postgresql-migration-conditions.md)：D-01 的触发条件、量化门槛与前置条件
 - [Agent 设计](./superpowers/specs/2026-11-05-craftingtable-agent-design.md)：Agent 现有契约
 - [工程化设计规范](./superpowers/specs/2026-11-05-craftingtable-engineering-design.md)：SDD 流程与边界规则
