@@ -96,6 +96,7 @@ type UpdateItemInput struct {
 // Repository 是今日模块拥有的持久化端口。
 type Repository interface {
 	ListToday(ctx context.Context, startAt, endAt string) ([]Item, error)
+	GetItem(ctx context.Context, id string) (Item, error)
 	ListCategories(ctx context.Context) ([]Category, error)
 	CreateItem(ctx context.Context, input CreateItemInput) (Item, error)
 	UpdateItem(ctx context.Context, input UpdateItemInput) (Item, error)

@@ -277,6 +277,14 @@ func (s *SQLiteStore) ListCategories(ctx context.Context) ([]today.Category, err
 	return categories, nil
 }
 
+// GetItem returns one non-deleted item by ID for read-only Agent access.
+func (s *SQLiteStore) GetItem(
+	ctx context.Context,
+	id string,
+) (today.Item, error) {
+	return s.getItem(ctx, id)
+}
+
 // CreateItem 创建一个任务；带开始时间时状态为 planned。
 func (s *SQLiteStore) CreateItem(
 	ctx context.Context,
