@@ -45,9 +45,9 @@ func (c ProviderFunctionCall) MarshalJSON() ([]byte, error) {
 
 // ModelRequest is one provider-neutral model call.
 type ModelRequest struct {
-	Messages   []ProviderMessage
-	Tools      []ProviderToolDefinition
-	ToolChoice string
+	Messages   []ProviderMessage        `json:"messages"`
+	Tools      []ProviderToolDefinition `json:"tools,omitempty"`
+	ToolChoice string                   `json:"tool_choice,omitempty"`
 }
 
 type StreamProvider interface {

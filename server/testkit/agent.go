@@ -6,7 +6,9 @@ import (
 	"github.com/leeat/craftingtable/server/internal/agent/core"
 	"github.com/leeat/craftingtable/server/internal/agent/domain"
 	"github.com/leeat/craftingtable/server/internal/agent/provider"
+	"github.com/leeat/craftingtable/server/internal/agent/tools"
 	"github.com/leeat/craftingtable/server/internal/platform/store"
+	"github.com/leeat/craftingtable/server/internal/today"
 )
 
 type SQLiteStore = store.SQLiteStore
@@ -32,10 +34,17 @@ type ModelRequest = core.ModelRequest
 type ContextMessage = domain.ContextMessage
 type RunExecution = domain.RunExecution
 type Run = domain.Run
+type RunHandle = domain.RunHandle
 type AgentStep = domain.AgentStep
+type MessagePart = domain.MessagePart
+type Tool = core.Tool
+type ToolDefinition = core.ToolDefinition
 type ToolResult = core.ToolResult
 type ToolResultContent = core.ToolResultContent
 type ToolError = core.ToolError
+type TodayReader = tools.TodayReader
+type CreateItemInput = today.CreateItemInput
+type Item = today.Item
 type StreamProvider = core.StreamProvider
 type CreateSessionRecord = core.CreateSessionRecord
 type CreateSendRunRecord = core.CreateSendRunRecord
@@ -47,6 +56,9 @@ var OpenSQLite = store.OpenSQLite
 var NewEventJournal = core.NewEventJournal
 var NewAgentService = core.NewService
 var NewAgentServiceWithConfig = core.NewServiceWithConfig
+var NewServiceWithTools = core.NewServiceWithTools
+var NewToolRegistry = core.NewToolRegistry
+var NewTodayTools = tools.NewTodayTools
 var NewOpenAICompatible = provider.NewOpenAICompatible
 var DefaultRuntimeConfig = core.DefaultRuntimeConfig
 var NewAgentError = domain.NewError

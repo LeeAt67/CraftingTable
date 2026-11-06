@@ -41,6 +41,27 @@ func NewServiceWithConfig(
 	}
 }
 
+func NewServiceWithTools(
+	repository Repository,
+	provider StreamProvider,
+	registry *ToolRegistry,
+	logger *slog.Logger,
+	config RuntimeConfig,
+) *Service {
+	return &Service{
+		repository: repository,
+		coordinator: newCoordinator(
+			repository,
+			provider,
+			registry,
+			logger,
+			config,
+		),
+		logger: logger,
+		config: normalizedRuntimeConfig(config),
+	}
+}
+
 func (s *Service) CreateSession(
 	ctx context.Context,
 	input CreateSessionRecord,

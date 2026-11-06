@@ -10,6 +10,9 @@ type RuntimeConfig struct {
 	FinalizeTimeout    time.Duration
 	FinalizeRetryDelay time.Duration
 	FinalizeAttempts   int
+	ToolsEnabled       bool
+	MaxModelSteps      int
+	MaxToolCalls       int
 }
 
 func DefaultRuntimeConfig() RuntimeConfig {
@@ -20,6 +23,9 @@ func DefaultRuntimeConfig() RuntimeConfig {
 		FinalizeTimeout:    5 * time.Second,
 		FinalizeRetryDelay: 100 * time.Millisecond,
 		FinalizeAttempts:   3,
+		ToolsEnabled:       true,
+		MaxModelSteps:      4,
+		MaxToolCalls:       8,
 	}
 }
 
@@ -42,6 +48,12 @@ func normalizedRuntimeConfig(config RuntimeConfig) RuntimeConfig {
 	}
 	if config.FinalizeAttempts <= 0 {
 		config.FinalizeAttempts = defaults.FinalizeAttempts
+	}
+	if config.MaxModelSteps <= 0 {
+		config.MaxModelSteps = defaults.MaxModelSteps
+	}
+	if config.MaxToolCalls <= 0 {
+		config.MaxToolCalls = defaults.MaxToolCalls
 	}
 	return config
 }
