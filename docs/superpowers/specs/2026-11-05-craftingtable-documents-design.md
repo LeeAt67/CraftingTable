@@ -109,7 +109,7 @@
 
 ## 5. 数据模型
 
-新增迁移 `server/internal/platform/store/migrations/003_docs.sql`：
+新增迁移 `server/internal/platform/store/migrations/006_docs.sql`：
 
 ```sql
 CREATE TABLE IF NOT EXISTS doc_nodes (

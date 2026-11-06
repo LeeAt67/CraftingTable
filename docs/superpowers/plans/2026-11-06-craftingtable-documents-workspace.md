@@ -32,7 +32,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `server/internal/platform/store/migrations/003_docs.sql` | 建表与索引 |
+| `server/internal/platform/store/migrations/006_docs.sql` | 建表与索引 |
 | `server/internal/docs/node.go` | 节点类型、错误、标题归一化 |
 | `server/internal/docs/repository.go` | `Repository` 端口 |
 | `server/internal/docs/search.go` | 搜索入参、游标编解码、关键词清洗 |
@@ -68,7 +68,7 @@
 ## Task 1: 数据表与迁移护栏
 
 **Files:**
-- Create: `server/internal/platform/store/migrations/003_docs.sql`
+- Create: `server/internal/platform/store/migrations/006_docs.sql`
 - Modify: `tests/e2e/integration/migrations.integration_test.go:50`
 
 **Interfaces:**
@@ -77,7 +77,7 @@
 
 - [ ] **Step 1: 写迁移文件**
 
-创建 `server/internal/platform/store/migrations/003_docs.sql`：
+创建 `server/internal/platform/store/migrations/006_docs.sql`：
 
 ```sql
 CREATE TABLE IF NOT EXISTS doc_nodes (
@@ -108,7 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_doc_nodes_updated ON doc_nodes(updated_at DESC);
 	for _, name := range []string{
 		"001_initial.sql",
 		"002_agent.sql",
-		"003_docs.sql",
+		"006_docs.sql",
 	} {
 		if len(applied[name]) != 64 {
 			t.Fatalf("migration %s checksum = %q", name, applied[name])
@@ -124,7 +124,7 @@ Expected: PASS，两个迁移测试均通过
 - [ ] **Step 4: 提交**
 
 ```bash
-git add server/internal/platform/store/migrations/003_docs.sql tests/e2e/integration/migrations.integration_test.go
+git add server/internal/platform/store/migrations/006_docs.sql tests/e2e/integration/migrations.integration_test.go
 git commit -m "feat: add document node table migration"
 ```
 
