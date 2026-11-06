@@ -58,6 +58,7 @@
 | `A` | 今日 API 与数据 |
 | `Q` | 质量与非功能 |
 | `AG` | Agent 能力 |
+| `D` | 数据与存储 |
 
 编号一经使用不复用。删除需求时保留编号，状态改 `已取代`。
 
@@ -158,6 +159,28 @@
 
 这些需求全部处于 `提案` 状态、无代码引用，因此拆分不产生歧义；若后续有任何文档或提交引用过旧编号，以本表为准。
 
+### 3.8 数据与存储（D）
+
+来源：[SQLite 全面迁移到 PostgreSQL 的条件调研](./research/2026-11-06-sqlite-to-postgresql-migration-conditions.md)。该文档只定义触发条件与前置条件，不包含迁移实现方案；在任一触发线成立前不进入设计。
+
+| 编号 | 需求 | 优先级 | 状态 | 调研 / 设计文档 |
+| --- | --- | --- | --- | --- |
+| D-01 | 数据存储从 SQLite 迁移到 PostgreSQL：明确触发条件、量化门槛与前置条件 | P2 | 提案 | [调研 §4 触发条件、§6 前置条件](./research/2026-11-06-sqlite-to-postgresql-migration-conditions.md)；结论为当前不迁移，任一触发线成立才启动评估 |
+
+**触发线与前置条件摘要**（完整定义见调研文档，需求状态以本节表格为准）：
+
+| 触发线 | 判定条件 |
+| --- | --- |
+| T1 访问形态 | 多进程/多实例同写一个库、库文件放共享存储、部署环境无持久本地盘 |
+| T2 并发与延迟 | 持续并行写、写 p95 > 200 ms、`SQLITE_BUSY` 频繁出现（须在开 WAL 并放宽连接池后重测） |
+| T3 规模与运维 | 库 > 2 GB、单表 > 500 万行、备份窗口 > 5 分钟、RPO < 5 分钟或 RTO < 1 分钟 |
+| T4 能力缺口 | 需要 RLS/多租户、在线 DDL、只读副本、`SERIALIZABLE` 调参、`JSONB`/GIN、跨进程 advisory lock |
+| T5 组织形态 | 需要独立 DBA、多环境实例或托管数据库服务 |
+
+前置条件 P-01 至 P-06（方言收敛、时间规范化下沉、迁移账本解耦、事务语义显式化、双后端测试矩阵）见调研文档 §6，其中 P-01 至 P-04 可独立于迁移先行完成。
+
+**已确认的现状事实**：当前连接池限制为 1 且未启用 WAL，数据库访问全局串行。任何"SQLite 性能不足"的判断在开启 WAL 并放宽连接池之前都不构成迁移理由。
+
 ## 4. 调研与设计文档绑定
 
 正向索引在 §3 的表格里：每条需求指向支撑它的文档。这一节是反向索引：每份文档支撑了哪些需求。新增或更换调研文档时，两处都要改。
@@ -168,6 +191,7 @@
 | [今日服务端设计](./superpowers/specs/2026-11-05-craftingtable-today-server-design.md) | 设计 | A-01、A-02、A-03 | 已实现 |
 | [今日服务端实施计划](./superpowers/plans/2026-11-05-craftingtable-today-server.md) | 计划 | A-01、A-02、A-03 | 已交付 |
 | [通用 Agent 调研与当前实现对比](./research/2026-11-06-general-agent-comparison.md) | 调研 | AG-01 至 AG-09 | 调研结论，未进入设计 |
+| [SQLite 迁移 PostgreSQL 条件调研](./research/2026-11-06-sqlite-to-postgresql-migration-conditions.md) | 调研 | D-01 | 调研结论，当前不迁移 |
 | [Agent 设计](./superpowers/specs/2026-11-05-craftingtable-agent-design.md) | 设计 | AG 系列的现有基线 | 已确认 |
 | [Run 恢复 ADR](./architecture/ADR-001-agent-run-recovery.md) | 决策记录 | AG-05 | 已确认 |
 | [工程化设计规范](./superpowers/specs/2026-11-05-craftingtable-engineering-design.md) | 规范 | Q-01、Q-05 及全部需求的流程约束 | 已确认 |
@@ -185,6 +209,7 @@
 - [非 Agent 工作台需求调研](./research/2026-11-05-non-agent-workbench-requirement-research.md)：T / S / N / A / Q 五个域的现状盘点与完整验收标准
 - [今日服务端设计](./superpowers/specs/2026-11-05-craftingtable-today-server-design.md)：A-01 至 A-03 的契约与取舍
 - [通用 Agent 调研](./research/2026-11-06-general-agent-comparison.md)：AG 需求的来源与差距分析
+- [SQLite 迁移 PostgreSQL 条件调研](./research/2026-11-06-sqlite-to-postgresql-migration-conditions.md)：D-01 的触发条件、量化门槛与前置条件
 - [Agent 设计](./superpowers/specs/2026-11-05-craftingtable-agent-design.md)：Agent 现有契约
 - [工程化设计规范](./superpowers/specs/2026-11-05-craftingtable-engineering-design.md)：SDD 流程与边界规则
 - [Agent 架构图](./architecture/README.md)
