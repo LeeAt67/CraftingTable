@@ -1,9 +1,14 @@
 .doc-prose {
   min-height: 320px;
-  outline: none;
   color: var(--textBody);
   font-size: 15px;
   line-height: 1.75;
+}
+
+/* 全页正文编辑器以光标作为焦点提示；全局 :focus-visible 焦点环会框住整个编辑区。 */
+.doc-prose:focus,
+.doc-prose:focus-visible {
+  outline: none;
 }
 
 .doc-prose > * + * {
