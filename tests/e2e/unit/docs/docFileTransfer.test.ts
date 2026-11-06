@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   documentTitleFromFilename,
   importMarkdownError,
-  MAX_IMPORT_RUNES,
   sanitizeFileName,
 } from "@/components/docs/docFileTransfer";
+import { MAX_CONTENT_RUNES } from "@/models/docContracts";
 
 describe("docFileTransfer", () => {
   it("derives a title from a markdown filename", () => {
@@ -23,9 +23,9 @@ describe("docFileTransfer", () => {
 
   it("rejects empty and oversized imports before creating a document", () => {
     expect(importMarkdownError("  \n ")).toBe("无法导入空文件");
-    expect(importMarkdownError("a".repeat(MAX_IMPORT_RUNES))).toBeNull();
-    expect(importMarkdownError("a".repeat(MAX_IMPORT_RUNES + 1))).toBe(
-      `文档超过 ${MAX_IMPORT_RUNES} 个字符，无法导入`,
+    expect(importMarkdownError("a".repeat(MAX_CONTENT_RUNES))).toBeNull();
+    expect(importMarkdownError("a".repeat(MAX_CONTENT_RUNES + 1))).toBe(
+      `文档超过 ${MAX_CONTENT_RUNES} 个字符，无法导入`,
     );
     expect(importMarkdownError("# 标题")).toBeNull();
     expect(importMarkdownError("a\u0000b")).toBe("仅支持导入文本文件");

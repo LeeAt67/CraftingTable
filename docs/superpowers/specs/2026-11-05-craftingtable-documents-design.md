@@ -329,7 +329,7 @@ type DocsState = {
   activeNodeId: string | null;
   activeNode: DocNode | null;
   draftContent: string;
-  saveStatus: "idle" | "saving" | "saved" | "error";
+  saveStatus: "idle" | "saving" | "saved" | "error" | "too-long";
   phase: "idle" | "loading" | "ready" | "error";
   errorMessage: string | null;
   searchQuery: string;
@@ -398,6 +398,7 @@ Markdown 往返约定：
 ```text
 idle -> saving -> saved
               -> error -> saving（用户重试或再次编辑）
+              -> too-long（正文超过上限，改短后回到 saving）
 ```
 
 要求：
@@ -407,6 +408,7 @@ idle -> saving -> saved
 3. 保存请求携带最后一次编辑的 `content` 快照，响应返回 `updatedAt` 后更新树顺序。
 4. 切换文档前必须 flush；若 flush 失败，阻止切换并提示。
 5. 同一文档的保存请求串行化，避免后发先至覆盖。
+6. 正文超过 200000 rune 时由前端拦截：不发请求、状态切到 `too-long`（「内容过长，无法保存」），同一次超限过程只提示一次；改回上限内后恢复正常自动保存。
 
 ## 11. 导入与导出
 

@@ -1,6 +1,6 @@
-const DEFAULT_TITLE = "无标题文档";
+import { MAX_CONTENT_RUNES } from "@/models/docContracts";
 
-export const MAX_IMPORT_RUNES = 200000;
+const DEFAULT_TITLE = "无标题文档";
 
 export function documentTitleFromFilename(name: string): string {
   const trimmed = name.trim();
@@ -20,8 +20,8 @@ export function importMarkdownError(content: string): string | null {
   if (content.includes("\u0000")) {
     return "仅支持导入文本文件";
   }
-  if ([...content].length > MAX_IMPORT_RUNES) {
-    return `文档超过 ${MAX_IMPORT_RUNES} 个字符，无法导入`;
+  if ([...content].length > MAX_CONTENT_RUNES) {
+    return `文档超过 ${MAX_CONTENT_RUNES} 个字符，无法导入`;
   }
   return null;
 }

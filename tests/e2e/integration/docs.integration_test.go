@@ -1,8 +1,10 @@
 package integration
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -197,6 +199,42 @@ func TestDocsAPIValidatesInput(t *testing.T) {
 	)
 	if status != http.StatusNotFound || failure.Error.Code != "NOT_FOUND" {
 		t.Fatalf("save missing = %d/%#v", status, failure.Error)
+	}
+}
+
+func TestDocsAPIRejectsOverlongContent(t *testing.T) {
+	server := startServer(t, "")
+
+	status, created := requestJSON[docNodeEnvelope](
+		t,
+		http.MethodPost,
+		server.URL("/api/v1/docs/create"),
+		`{"kind":"document","title":"超长正文"}`,
+	)
+	if status != http.StatusOK {
+		t.Fatalf("create = %d", status)
+	}
+
+	overlong := strings.Repeat("字", 200001)
+	body, err := json.Marshal(map[string]string{
+		"id":      created.Data.ID,
+		"content": overlong,
+	})
+	if err != nil {
+		t.Fatalf("marshal = %v", err)
+	}
+
+	status, failure := requestJSON[errorEnvelope](
+		t,
+		http.MethodPost,
+		server.URL("/api/v1/docs/save"),
+		string(body),
+	)
+	if status != http.StatusBadRequest || failure.Error.Code != "VALIDATION_ERROR" {
+		t.Fatalf("overlong save = %d/%#v", status, failure.Error)
+	}
+	if failure.Error.Message != "文档内容过长（上限 200000 字符）" {
+		t.Fatalf("overlong message = %q", failure.Error.Message)
 	}
 }
 

@@ -212,6 +212,8 @@ func (c *Controller) writeError(
 		c.validationError(w, r, "不能移动到自身或子节点")
 	case errors.Is(err, ErrFolderHasContent):
 		c.validationError(w, r, "文件夹不能保存正文")
+	case errors.Is(err, ErrContentTooLong):
+		c.validationError(w, r, "文档内容过长（上限 200000 字符）")
 	case errors.Is(err, ErrInvalidCursor):
 		c.validationError(w, r, "搜索游标与查询词不匹配")
 	case errors.Is(err, ErrInvalidInput):

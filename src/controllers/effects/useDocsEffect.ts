@@ -2,6 +2,10 @@ import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { useDocsStore } from "@/controllers/stores/docsStore";
 import type { DocNodeKind, DocsModel } from "@/models/docContracts";
+import {
+  CONTENT_TOO_LONG_MESSAGE,
+  MAX_CONTENT_RUNES,
+} from "@/models/docContracts";
 import { docsModel } from "@/models/docsModel";
 
 type Notifier = {
@@ -49,6 +53,7 @@ export function createDocsEffect(
   let searchSequence = 0;
   let nodeSequence = 0;
   let saveSequence: Promise<void> = Promise.resolve();
+  let contentTooLongNotified = false;
 
   const loadTree = async () => {
     useDocsStore.getState().setLoading();
@@ -153,6 +158,23 @@ export function createDocsEffect(
 
   const applyContentChange = (id: string, content: string) => {
     useDocsStore.getState().setDraftContent(content);
+    if ([...content].length > MAX_CONTENT_RUNES) {
+      // 超限内容不入队保存：每 400ms 发一次注定 400 的请求毫无意义。
+      pendingSave = null;
+      if (contentTimer) {
+        clearTimeout(contentTimer);
+        contentTimer = null;
+      }
+      if (useDocsStore.getState().activeNodeId === id) {
+        useDocsStore.getState().setSaveStatus("too-long");
+      }
+      if (!contentTooLongNotified) {
+        contentTooLongNotified = true;
+        notify.error(CONTENT_TOO_LONG_MESSAGE);
+      }
+      return;
+    }
+    contentTooLongNotified = false;
     pendingSave = { id, content };
     if (contentTimer) {
       clearTimeout(contentTimer);

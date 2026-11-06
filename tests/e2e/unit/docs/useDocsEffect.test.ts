@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDocsEffect } from "@/controllers/effects/useDocsEffect";
 import { initialDocsState, useDocsStore } from "@/controllers/stores/docsStore";
 import type { DocsModel, DocNode } from "@/models/docContracts";
+import {
+  CONTENT_TOO_LONG_MESSAGE,
+  MAX_CONTENT_RUNES,
+} from "@/models/docContracts";
 
 const folder = {
   id: "folder-1",
@@ -340,5 +344,47 @@ describe("docsEffect", () => {
     expect(useDocsStore.getState().activeNodeId).toBe("doc-b");
     expect(useDocsStore.getState().saveStatus).toBe("idle");
     expect(notify.error).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to save overlong content and warns only once", async () => {
+    const nodeA = { ...document, id: "doc-a", title: "文档 A", content: "" };
+    const saveContent = vi.fn();
+
+    const effect = createDocsEffect(createModel({ saveContent }), notify);
+
+    useDocsStore.getState().setActiveNode(nodeA);
+    const tooLong = "字".repeat(MAX_CONTENT_RUNES + 1);
+    effect.applyContentChange("doc-a", tooLong);
+    effect.applyContentChange("doc-a", `${tooLong}字`);
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(saveContent).not.toHaveBeenCalled();
+    expect(useDocsStore.getState().saveStatus).toBe("too-long");
+    expect(notify.error).toHaveBeenCalledTimes(1);
+    expect(notify.error).toHaveBeenCalledWith(CONTENT_TOO_LONG_MESSAGE);
+  });
+
+  it("saves again once the content is trimmed back under the limit", async () => {
+    const nodeA = { ...document, id: "doc-a", title: "文档 A", content: "" };
+    const saveContent = vi
+      .fn()
+      .mockResolvedValue({ id: "doc-a", updatedAt: "2026-11-06T00:00:09Z" });
+
+    const effect = createDocsEffect(createModel({ saveContent }), notify);
+
+    useDocsStore.getState().setActiveNode(nodeA);
+    effect.applyContentChange("doc-a", "字".repeat(MAX_CONTENT_RUNES + 1));
+    await vi.advanceTimersByTimeAsync(400);
+    expect(useDocsStore.getState().saveStatus).toBe("too-long");
+
+    effect.applyContentChange("doc-a", "# 删短了");
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(saveContent).toHaveBeenCalledWith({
+      id: "doc-a",
+      content: "# 删短了",
+    });
+    expect(useDocsStore.getState().saveStatus).toBe("saved");
   });
 });

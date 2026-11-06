@@ -6,7 +6,7 @@ import type {
 } from "@/models/docContracts";
 
 export type DocsPhase = "idle" | "loading" | "ready" | "error";
-export type SaveStatus = "idle" | "saving" | "saved" | "error";
+export type SaveStatus = "idle" | "saving" | "saved" | "error" | "too-long";
 export type SearchPhase = "idle" | "loading" | "ready" | "error";
 export type NodePhase = "idle" | "loading" | "ready" | "error";
 

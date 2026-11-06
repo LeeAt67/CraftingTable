@@ -119,7 +119,7 @@ func (s *Service) SaveContent(ctx context.Context, input SaveContentInput) (stri
 		return "", ErrFolderHasContent
 	}
 	if utf8.RuneCountInString(input.Content) > MaxContentRunes {
-		return "", ErrInvalidInput
+		return "", ErrContentTooLong
 	}
 	return s.repository.SaveContent(ctx, SaveContentInput{
 		ID:      current.ID,

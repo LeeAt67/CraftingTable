@@ -22,6 +22,8 @@ var (
 	ErrNodeNotFound = errors.New("doc node not found")
 	// ErrInvalidInput 表示请求不满足领域约束。
 	ErrInvalidInput = errors.New("invalid doc node input")
+	// ErrContentTooLong 表示文档正文超过 MaxContentRunes。
+	ErrContentTooLong = errors.New("doc content too long")
 	// ErrInvalidCursor 表示搜索游标非法或与查询词不匹配。
 	ErrInvalidCursor = errors.New("invalid search cursor")
 	// ErrParentNotFolder 表示目标父节点不是文件夹。

@@ -1,5 +1,10 @@
 export type DocNodeKind = "folder" | "document";
 
+/** 与后端 server/internal/docs/node.go 的 MaxContentRunes 保持一致。 */
+export const MAX_CONTENT_RUNES = 200000;
+
+export const CONTENT_TOO_LONG_MESSAGE = `文档内容过长（上限 ${MAX_CONTENT_RUNES} 字符）`;
+
 export type DocNodeSummary = {
   id: string;
   parentId: string | null;

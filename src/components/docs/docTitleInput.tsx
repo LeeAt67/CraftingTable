@@ -16,6 +16,7 @@ const statusText: Record<SaveStatus, string> = {
   saving: "保存中…",
   saved: "已保存",
   error: "保存失败，点击重试",
+  "too-long": "内容过长，无法保存",
 };
 
 export function DocTitleInput({ value, status, onChange, onRetry }: Props) {
@@ -50,7 +51,9 @@ export function DocTitleInput({ value, status, onChange, onRetry }: Props) {
         role="status"
         className={cn(
           "text-xs",
-          visibleStatus === "error" ? "text-destructive" : "text-textSecondary",
+          visibleStatus === "error" || visibleStatus === "too-long"
+            ? "text-destructive"
+            : "text-textSecondary",
         )}
       >
         {visibleStatus === "error" ? (

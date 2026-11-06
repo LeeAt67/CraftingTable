@@ -188,8 +188,8 @@ func TestServiceSaveContentValidatesKindAndLength(t *testing.T) {
 	if _, err := service.SaveContent(context.Background(), SaveContentInput{
 		ID:      "doc",
 		Content: string(long),
-	}); !errors.Is(err, ErrInvalidInput) {
-		t.Fatalf("long content error = %v, want ErrInvalidInput", err)
+	}); !errors.Is(err, ErrContentTooLong) {
+		t.Fatalf("long content error = %v, want ErrContentTooLong", err)
 	}
 
 	if _, err := service.SaveContent(context.Background(), SaveContentInput{

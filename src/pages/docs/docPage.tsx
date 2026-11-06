@@ -14,6 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocsEffect } from "@/controllers/effects/useDocsEffect";
 import { useDocsStore } from "@/controllers/stores/docsStore";
+import type { SaveStatus } from "@/controllers/stores/docsStore";
+
+const isSaveBlocked = (status: SaveStatus) =>
+  status === "error" || status === "too-long";
 
 export default function DocPage() {
   const { nodeId } = useParams();
@@ -81,7 +85,7 @@ export default function DocPage() {
     const renamed = await effect.renameNode(node.id, title, { silent: true });
     effect.applyContentChange(node.id, content);
     await effect.flushSave();
-    if (useDocsStore.getState().saveStatus === "error") {
+    if (isSaveBlocked(useDocsStore.getState().saveStatus)) {
       return;
     }
 
@@ -94,7 +98,7 @@ export default function DocPage() {
 
   const exportMarkdown = async () => {
     await effect.flushSave();
-    if (useDocsStore.getState().saveStatus === "error") {
+    if (isSaveBlocked(useDocsStore.getState().saveStatus)) {
       toast.error("文档尚未保存成功，暂时无法导出");
       return;
     }
