@@ -59,6 +59,7 @@
 | `Q` | 质量与非功能 |
 | `AG` | Agent 能力 |
 | `D` | 数据与存储 |
+| `K` | 文档与知识库 |
 
 编号一经使用不复用。删除需求时保留编号，状态改 `已取代`。
 
@@ -193,6 +194,20 @@
 
 **已确认的现状事实**：当前连接池限制为 1 且未启用 WAL，数据库访问全局串行。任何"SQLite 性能不足"的判断在开启 WAL 并放宽连接池之前都不构成迁移理由。
 
+### 3.9 文档与知识库（K）
+
+来源：[应用内知识库调研](./research/2026-11-06-knowledge-base-research.md)。该调研以 MiCO wiki 的真实实现为对照基线，结论是当前不做知识库，但先把触发条件定死。
+
+| 编号 | 需求 | 优先级 | 状态 | 调研 / 设计文档 |
+| --- | --- | --- | --- | --- |
+| K-01 | 文档检索从 `LIKE` 子串升级为可扩展检索 | P1 | 提案 | [调研 §5 K-T1、§6.4](./research/2026-11-06-knowledge-base-research.md)；触发条件为文档数 > 500 或检索 p95 > 300 ms 或出现"同义不同词"的真实检索失败；第一步用 PostgreSQL `tsvector` + `pg_trgm`，不引入向量 |
+| K-02 | Agent 知识操作的作用域锚定与审批分层 | P0 | 提案 | [调研 §3.1、§6.1](./research/2026-11-06-knowledge-base-research.md)；MiCO ADR-0012 记录了「选中一句 → 删掉整篇」的真实事故，五条铁律可作为 AG-03 的硬约束 |
+| K-03 | 文档失效内部链接检测 | P2 | 提案 | [调研 §6.5](./research/2026-11-06-knowledge-base-research.md)；扫描 `doc_nodes.content` 的内部链接，比对目标存在性，成本约一人天 |
+
+**K-01 的边界说明**：这条需求不是"做知识库"，只是"检索不被文档规模卡死"。知识库（蒸馏页、图谱、外部数据源同步）在调研 §7 中被明确列为不吸收项，任一触发条件成立前都不进入设计。
+
+**与 AG-03 的关系**：K-02 是 AG-03 的前置约束，不是并列项。AG-03 设计工具审批时必须先确定作用域判定规则，否则写工具一上线就会重复 MiCO 的事故。
+
 ## 4. 调研与设计文档绑定
 
 正向索引在 §3 的表格里：每条需求指向支撑它的文档。这一节是反向索引：每份文档支撑了哪些需求。新增或更换调研文档时，两处都要改。
@@ -206,6 +221,7 @@
 | [AG-01 工具运行时深度调研](./research/2026-11-06-ag-01-tool-runtime-deep-dive.md) | 调研 | AG-01 | 已实现 |
 | [SQLite 迁移 PostgreSQL 条件调研](./research/2026-11-06-sqlite-to-postgresql-migration-conditions.md) | 调研 | D-01 | 调研结论，当前不迁移 |
 | [测试策略调研](./research/2026-11-06-testing-strategy.md) | 调研 | Q-05、Q-06 | 调研结论，未进入设计 |
+| [应用内知识库调研](./research/2026-11-06-knowledge-base-research.md) | 调研 | K-01、K-02、K-03 | 调研结论，当前不做知识库 |
 | [Agent 设计](./superpowers/specs/2026-11-05-craftingtable-agent-design.md) | 设计 | AG 系列的现有基线 | 已确认 |
 | [Run 恢复 ADR](./architecture/ADR-001-agent-run-recovery.md) | 决策记录 | AG-05 | 已确认 |
 | [工程化设计规范](./superpowers/specs/2026-11-05-craftingtable-engineering-design.md) | 规范 | Q-01、Q-05 及全部需求的流程约束 | 已确认 |
@@ -226,6 +242,7 @@
 - [AG-01 工具运行时深度调研](./research/2026-11-06-ag-01-tool-runtime-deep-dive.md)：工具契约、执行、持久化、Provider 映射与首版范围
 - [SQLite 迁移 PostgreSQL 条件调研](./research/2026-11-06-sqlite-to-postgresql-migration-conditions.md)：D-01 的触发条件、量化门槛与前置条件
 - [测试策略调研](./research/2026-11-06-testing-strategy.md)：Q-05、Q-06 的边界覆盖方法、框架组织、书写规范与正确性验证
+- [应用内知识库调研](./research/2026-11-06-knowledge-base-research.md)：K 系列的触发条件，以及 MiCO wiki 的可借鉴与不借鉴项
 - [Agent 设计](./superpowers/specs/2026-11-05-craftingtable-agent-design.md)：Agent 现有契约
 - [工程化设计规范](./superpowers/specs/2026-11-05-craftingtable-engineering-design.md)：SDD 流程与边界规则
 - [Agent 架构图](./architecture/README.md)
