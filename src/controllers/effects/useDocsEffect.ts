@@ -227,11 +227,12 @@ export function createDocsEffect(
       return;
     }
 
+    useDocsStore.getState().setSearchPhase("loading");
+
     searchTimer = setTimeout(() => {
       searchTimer = null;
       searchSequence += 1;
       const sequence = searchSequence;
-      useDocsStore.getState().setSearchPhase("loading");
       void model
         .search({ q: query, limit: 20 })
         .then((page) => {

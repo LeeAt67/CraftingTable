@@ -215,4 +215,12 @@ describe("docsEffect", () => {
     expect(search).not.toHaveBeenCalled();
     expect(useDocsStore.getState().searchQuery).toBe("");
   });
+
+  it("enters the loading phase as soon as a query is typed", () => {
+    const effect = createDocsEffect(createModel(), notify);
+
+    effect.search("接口");
+
+    expect(useDocsStore.getState().searchPhase).toBe("loading");
+  });
 });
