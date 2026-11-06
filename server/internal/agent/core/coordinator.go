@@ -289,7 +289,7 @@ func (c *Coordinator) execute(active *activeRun) {
 	active.startIdleTimer(c.config.IdleTimeout)
 	body, err := c.provider.Stream(
 		active.ctx,
-		ContextMessages(execution.Messages),
+		ModelRequest{Messages: ContextMessages(execution.Messages)},
 	)
 	if err != nil {
 		c.finishFromExecutionError(active, err)
@@ -297,7 +297,7 @@ func (c *Coordinator) execute(active *activeRun) {
 	}
 	defer body.Close()
 
-	err = relayProviderStream(
+	_, err = CollectProviderTurn(
 		active.ctx,
 		body,
 		func(event string, payload any) error {

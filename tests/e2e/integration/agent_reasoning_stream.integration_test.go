@@ -16,15 +16,15 @@ import (
 type scriptedStreamProvider struct {
 	mu      sync.Mutex
 	scripts []string
-	calls   [][]testkit.ProviderMessage
+	calls   []testkit.ModelRequest
 }
 
 func (p *scriptedStreamProvider) Stream(
 	_ context.Context,
-	messages []testkit.ProviderMessage,
+	request testkit.ModelRequest,
 ) (io.ReadCloser, error) {
 	p.mu.Lock()
-	p.calls = append(p.calls, messages)
+	p.calls = append(p.calls, request)
 	index := len(p.calls) - 1
 	p.mu.Unlock()
 	body := ""
@@ -37,7 +37,7 @@ func (p *scriptedStreamProvider) Stream(
 func (p *scriptedStreamProvider) callMessages(index int) []testkit.ProviderMessage {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.calls[index]
+	return p.calls[index].Messages
 }
 
 func reasoningScript(reasoning, text string) string {

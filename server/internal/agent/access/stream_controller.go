@@ -242,7 +242,10 @@ func (c *Controller) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := c.provider.Stream(r.Context(), messages)
+	body, err := c.provider.Stream(
+		r.Context(),
+		core.ModelRequest{Messages: messages},
+	)
 	if err != nil {
 		if errors.Is(r.Context().Err(), context.Canceled) {
 			return

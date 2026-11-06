@@ -62,26 +62,30 @@ func NewOpenAICompatible(config OpenAICompatibleConfig) *OpenAICompatibleProvide
 // Stream 发起一次流式 chat/completions 请求。
 func (p *OpenAICompatibleProvider) Stream(
 	ctx context.Context,
-	messages []Message,
+	modelRequest core.ModelRequest,
 ) (io.ReadCloser, error) {
-	requestMessages := messages
+	requestMessages := modelRequest.Messages
 	if prompt := strings.TrimSpace(p.config.SystemPrompt); prompt != "" {
-		requestMessages = make([]Message, 0, len(messages)+1)
+		requestMessages = make([]Message, 0, len(modelRequest.Messages)+1)
 		requestMessages = append(requestMessages, Message{
 			Role:    "system",
 			Content: prompt,
 		})
-		requestMessages = append(requestMessages, messages...)
+		requestMessages = append(requestMessages, modelRequest.Messages...)
 	}
 
 	body, err := json.Marshal(struct {
-		Model    string    `json:"model"`
-		Messages []Message `json:"messages"`
-		Stream   bool      `json:"stream"`
+		Model      string                        `json:"model"`
+		Messages   []Message                     `json:"messages"`
+		Tools      []core.ProviderToolDefinition `json:"tools,omitempty"`
+		ToolChoice string                        `json:"tool_choice,omitempty"`
+		Stream     bool                          `json:"stream"`
 	}{
-		Model:    p.config.Model,
-		Messages: requestMessages,
-		Stream:   true,
+		Model:      p.config.Model,
+		Messages:   requestMessages,
+		Tools:      modelRequest.Tools,
+		ToolChoice: modelRequest.ToolChoice,
+		Stream:     true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: encode request: %v", ErrProviderUnavailable, err)

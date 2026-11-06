@@ -18,7 +18,7 @@ type gatedReasoningProvider struct {
 
 func (p *gatedReasoningProvider) Stream(
 	ctx context.Context,
-	_ []testkit.ProviderMessage,
+	_ testkit.ModelRequest,
 ) (io.ReadCloser, error) {
 	reader, writer := io.Pipe()
 	go func() {

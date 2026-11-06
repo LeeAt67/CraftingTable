@@ -20,7 +20,7 @@ type slowAgentProvider struct{}
 
 func (slowAgentProvider) Stream(
 	ctx context.Context,
-	_ []testkit.ProviderMessage,
+	_ testkit.ModelRequest,
 ) (io.ReadCloser, error) {
 	reader, writer := io.Pipe()
 	go func() {
@@ -53,7 +53,7 @@ type gatedAgentProvider struct {
 
 func (p gatedAgentProvider) Stream(
 	ctx context.Context,
-	_ []testkit.ProviderMessage,
+	_ testkit.ModelRequest,
 ) (io.ReadCloser, error) {
 	reader, writer := io.Pipe()
 	go func() {
@@ -84,7 +84,7 @@ type idleAgentProvider struct{}
 
 func (idleAgentProvider) Stream(
 	ctx context.Context,
-	_ []testkit.ProviderMessage,
+	_ testkit.ModelRequest,
 ) (io.ReadCloser, error) {
 	reader, writer := io.Pipe()
 	go func() {
