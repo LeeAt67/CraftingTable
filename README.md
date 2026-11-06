@@ -9,6 +9,7 @@ CraftingTable 是一个单用户个人事务工作台。当前仓库使用 React
 - 今日时间流和快捷待办。
 - Light / Dark 主题。
 - Agent 会话工作区、独立会话侧栏和流式消息界面。
+- 文档工作区：`/docs` 提供两级目录树、Markdown 编辑、自动保存、服务端标题搜索和 Markdown 导入导出，正文保存在本地 SQLite。
 - 一级导航、二级侧边栏和响应式布局。
 
 Agent 的 Session、Message、Part、Run 和生命周期事件保存在本地 SQLite，模型 Key 只存在于 Go 服务端。浏览器通过 `/api/v1/agent/session/*`、`/agent/message/*` 和带游标的 `/agent/run/stream` 使用 Go 服务；刷新页面后可以恢复历史，并继续订阅仍在 Go 进程内执行的 Run。前端由 `agentTransport.ts`、`eventsource-parser`、`agentStreamProtocol.ts` 和 `apiAgentModel.ts` 组成三层 pipe-through。
@@ -26,6 +27,7 @@ Agent 的 Session、Message、Part、Run 和生命周期事件保存在本地 SQ
 - [Agent 设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-design.md)
 - [Agent 持久化与恢复设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-persistence-recovery-design.md)
 - [Agent 流协议状态机设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-stream-state-machine-design.md)
+- [文档工作区设计](docs/superpowers/specs/2026-11-05-craftingtable-documents-design.md)
 - [Agent 架构图](docs/architecture/README.md)
 - [早期个人工作台设计（已取代）](docs/superpowers/specs/2026-11-04-leeat-personal-workbench-design.md)
 - [旧 Agent 工作区设计（已取代）](docs/superpowers/specs/20261104LeeatAgentWorkspaceDesign.md)

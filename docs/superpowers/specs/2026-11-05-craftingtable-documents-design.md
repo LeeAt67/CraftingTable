@@ -1,6 +1,6 @@
 # CraftingTable Documents Design
 
-- **Status:** Draft for review
+- **Status:** Implemented and verified on 2026-11-06
 - **Date:** 2026-11-05
 - **Scope:** 工作台「文档」工作区：目录树、Markdown 文档编辑、自动保存、服务端搜索、Markdown 导入导出
 - **Depends on:** [工程化设计规范](./2026-11-05-craftingtable-engineering-design.md)、[Leeat 个人工作台设计](./2026-11-04-leeat-personal-workbench-design.md)
