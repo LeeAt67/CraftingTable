@@ -28,6 +28,7 @@ Agent 的 Session、Message、Part、Run 和生命周期事件保存在本地 SQ
 相关文档：
 
 - [术语表](docs/glossary.md)
+- [通用 Agent 调研与当前实现对比](docs/research/2026-11-06-general-agent-comparison.md)
 - [工程化设计规范](docs/superpowers/specs/2026-11-05-craftingtable-engineering-design.md)
 - [Agent 设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-design.md)
 - [Agent 持久化与恢复设计](docs/superpowers/specs/2026-11-05-craftingtable-agent-persistence-recovery-design.md)
