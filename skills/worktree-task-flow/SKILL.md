@@ -21,9 +21,12 @@ worktree 让每个需求拥有自己的目录和分支，可以独立构建、�
 | --- | --- |
 | 新对话，首个实质请求是新需求 | 创建 worktree（本 skill 主路径） |
 | 延续同一需求（本轮已建过 worktree，或用户说"继续"） | 复用已有 worktree，不新建 |
+| 用户指定"在这个 worktree 里做" | 进入该目录，把 `worktree.owner` 改成自己，再开始 |
 | 纯问答、只读排查、代码走读 | 不建 worktree |
 | 用户说"就在当前目录改"、"不要建 worktree" | 遵从，跳过创建 |
 | 对话发生在已有 worktree 内 | 不嵌套创建 |
+
+用户指定了某个 worktree 时，**以用户指定的为准**，不要因为"当前目录是主工作区"就改在主工作区动手。先 `cd` 过去，确认分支和 `worktree.owner`，再开始。
 
 判断"是否新需求"看意图而不是措辞：要求产出代码、文档、配置变更的是需求；问"这个函数干什么"、"为什么报错"且只需读代码的是排查。拿不准时用一句话说明你打算建 worktree，然后直接建——用户介意会当场纠正，成本很低。
 
@@ -62,7 +65,7 @@ git rev-parse --git-common-dir
 git worktree add -b feat/quick-capture-category "<repo-parent>/<repo-name>-quick-capture-category" <base-branch>
 ```
 
-`<base-branch>` 用主分支（下一步探测），不要用另一个功能分支，否则合并时会把无关提交一起带进来。
+`<base-branch>` 用主分支（下一步探测），不要用另一个功能分支，否则合并时会把无关提交带进来。
 
 创建后立刻把三件事告诉用户，后续回报都用这几个值：
 
@@ -72,9 +75,32 @@ git worktree add -b feat/quick-capture-category "<repo-parent>/<repo-name>-quick
 
 如果目录或分支已存在，说明这个需求之前开过：先确认用户是要继续还是重开，不要换个名字再建一份。
 
+### 登记负责人
+
+创建后立刻写入归属信息，让下一个打开这个目录的会话知道"这里有主、意图是什么"。
+
+```bash
+git -C <worktree> config extensions.worktreeConfig true
+git -C <worktree> config --worktree worktree.owner   "<self-label> @ <ISO-8601 时间>"
+git -C <worktree> config --worktree worktree.purpose "<一句话需求>"
+git -C <worktree> config --worktree worktree.base    "<base-branch> @ <short-sha>"
+```
+
+`<self-label>` 用当前运行时加会话短号，例如 `copilot-sdk/fde12d0d`。值存在 `.git/worktrees/<name>/config.worktree`，不影响主分支配置。
+
+**这个字段是标签，不是访问控制。** 它没有强制力，任何能跑 git 的进程都能改。它的用途只有两个：让后来者知道该找谁确认、让长期闲置的 worktree 能被识别。不要把它当成权限系统，也不要因为写上了就以为自己有权改动别人的 scope。
+
+读取方式：
+
+```bash
+git -C <worktree> config --worktree worktree.owner
+```
+
+接手别人的 worktree 时（用户明确要求你继续某个已有目录），先把 owner 改成自己再开始改文件，否则记录会一直指向已经离开的会话。
+
 ### 之后的工作方式
 
-所有文件读写、命令执行都在 worktree 路径内完成。命令用 `cd <worktree>; ...` 前缀，或显式指定工作目录，避免误改主工作区。
+所有文件读写、命令执行都在自己的 worktree 路径内完成。命令用 `cd <worktree>; ...` 前缀，或显式指定工作目录，避免误改主工作区。
 
 遇到这类报错时不要改代码——它们是编辑器索引问题，不是编译错误：
 
@@ -83,6 +109,22 @@ git worktree add -b feat/quick-capture-category "<repo-parent>/<repo-name>-quick
 - 刚新增的包内符号报 `undefined:`
 
 判断依据是真实命令：`go build ./...`、`pnpm typecheck`、`tsc --noEmit`。另外不要用 `go.work` 把两个 worktree 同时纳入——同一模块路径会在 workspace 里重复，Go 直接拒绝加载。
+
+### 跨 worktree 边界
+
+**写操作只允许在自己负责的 worktree 内。**
+
+读操作有三个白名单用途，除此之外不要碰其他 worktree：
+
+| 用途 | 读什么 | 为什么必须允许 |
+| --- | --- | --- |
+| 合并预检 | 主工作区的 `git status` | 判断未提交改动是否会被覆盖。这是防止静默丢失用户工作的唯一手段 |
+| 推进主分支 | 在主工作区执行 `git merge --ff-only` | 合并到主分支本身就发生在主工作区 |
+| 合并后验证 | 在主工作区跑构建与测试 | 确认主分支确实可用，而不是只在功能分支上可用 |
+
+任何情况下都**不修改**其他 worktree 的工作区文件：不改文件、不 `checkout`、不 `reset`、不 `stash`、不清理它们的未跟踪文件。需要改动别人的目录才能完成任务时，停下来问用户。
+
+注意不要在报告里省略这条边界。用户问"你动了哪里"时，答案必须能逐个列出路径。
 
 ## 第二步：合并到主分支
 
@@ -237,10 +279,12 @@ git branch -d <branch>
 
 ## 安全边界
 
+- 写操作只在自己负责的 worktree 内；其他 worktree 只允许预检、`merge --ff-only`、合并后验证三种读取用途，绝不修改其文件。
 - 不在主分支上改写已有提交（不 `amend`、不 `rebase`、不 `reset --hard`）。
 - 不 `git push --force`。
 - 不删除未合并的分支或 worktree。
 - 不 stash 或回退用户在主工作区的未提交工作；重叠就停下来问。
 - 每次自动解决冲突都要能说出依据；说不清就交给用户。
 - 合并过程中任何一步失败，都要报告"停在哪一步、仓库处于什么状态"，不要让用户面对一个半合并的仓库自己猜。
+- `worktree.owner` 只是标签，不具备强制力，不要用它代替用户的明确授权。
 
