@@ -131,16 +131,32 @@
 
 ### 3.7 Agent 能力（AG）
 
-来源：[通用 Agent 调研与当前实现对比](./research/2026-11-06-general-agent-comparison.md)。该文档是调研结论，不是已批准的设计；下列需求进入实现前必须先出设计与计划。
+来源：[通用 Agent 调研与当前实现对比](./research/2026-11-06-general-agent-comparison.md) §5.3 与 §6。该文档是调研结论，不是已批准的设计；下列需求进入实现前必须先出设计与计划。
 
 | 编号 | 需求 | 优先级 | 状态 | 调研 / 设计文档 |
 | --- | --- | --- | --- | --- |
-| AG-01 | Agent Loop 与类型化工具协议 | P0 | 提案 | [调研 §6 P0](./research/2026-11-06-general-agent-comparison.md) |
-| AG-02 | 执行边界与副作用治理：权限、审批、沙箱 | P0 | 提案 | [调研 §6 P0](./research/2026-11-06-general-agent-comparison.md) |
-| AG-03 | Workspace 与 Artifact | P1 | 提案 | [调研 §6 P1](./research/2026-11-06-general-agent-comparison.md) |
-| AG-04 | Step 检查点、审批恢复与上下文工程 | P1 | 提案 | [调研 §6 P1](./research/2026-11-06-general-agent-comparison.md)、[Run 恢复 ADR](./architecture/ADR-001-agent-run-recovery.md) |
-| AG-05 | Trace、Artifact 与 Eval | P1 | 提案 | [调研 §6 P1](./research/2026-11-06-general-agent-comparison.md) |
-| AG-06 | Skills、MCP 与 Multi-Agent | P2 | 提案 | [调研 §6 P2](./research/2026-11-06-general-agent-comparison.md) |
+| AG-01 | Tool Registry、工具 Schema、ToolCall / ToolResult 契约与工具执行器 | P0 | 提案 | [调研 §5.3、§6 P0](./research/2026-11-06-general-agent-comparison.md) |
+| AG-02 | 模型与工具之间的多 Step 循环 | P0 | 提案 | [调研 §5.3、§6 P0](./research/2026-11-06-general-agent-comparison.md) |
+| AG-03 | 工具审批、权限策略、用户确认与暂停后恢复 | P0 | 提案 | [调研 §5.3、§6 P0](./research/2026-11-06-general-agent-comparison.md) |
+| AG-04 | 文件系统、Shell、Workspace、Docker 与远程沙箱 | P0 | 提案 | [调研 §5.3、§6 P0、§6 P1 Workspace](./research/2026-11-06-general-agent-comparison.md) |
+| AG-05 | Step Checkpoint、跨进程接管与持久化执行引擎 | P1 | 提案 | [调研 §5.3、§6 P1](./research/2026-11-06-general-agent-comparison.md)、[Run 恢复 ADR](./architecture/ADR-001-agent-run-recovery.md) |
+| AG-06 | Skills、MCP Client、Subagent、Handoff 与 Multi-Agent | P2 | 提案 | [调研 §5.3、§6 P2](./research/2026-11-06-general-agent-comparison.md) |
+| AG-07 | Trace 平台、Artifact 清单与正式 Eval | P1 | 提案 | [调研 §5.3、§6 P1](./research/2026-11-06-general-agent-comparison.md) |
+| AG-08 | 服务端多供应商归一化 | P2 | 提案 | [调研 §5.3、§7、§10](./research/2026-11-06-general-agent-comparison.md)；按既定计划后置，前端只消费统一契约 |
+| AG-09 | 上下文工程：摘要、检索、压缩与 Step 级上下文快照 | P1 | 提案 | [调研 §5.2、§6 P1](./research/2026-11-06-general-agent-comparison.md) |
+
+**编号调整记录（2026-11-06）**：本节原先按调研文档的粗粒度分组编写 AG-01 至 AG-06，与 §5.3 的 8 条待实现清单不是一一对应。现按清单逐条拆分为 AG-01 至 AG-08，并补 AG-09 承接原 AG-04 中「上下文工程」一项，避免拆分时丢失。原编号与新编号的对应关系：
+
+| 原编号 | 原需求 | 拆分去向 |
+| --- | --- | --- |
+| AG-01 | Agent Loop 与类型化工具协议 | AG-01（工具契约与执行器）、AG-02（多 Step 循环） |
+| AG-02 | 执行边界与副作用治理：权限、审批、沙箱 | AG-03（审批与暂停恢复）、AG-04（沙箱） |
+| AG-03 | Workspace 与 Artifact | AG-04（Workspace）、AG-07（Artifact 清单） |
+| AG-04 | Step 检查点、审批恢复与上下文工程 | AG-03（审批恢复）、AG-05（检查点与接管）、AG-09（上下文工程） |
+| AG-05 | Trace、Artifact 与 Eval | AG-07 |
+| AG-06 | Skills、MCP 与 Multi-Agent | AG-06（编号不变，范围扩展为含 Subagent 与 Handoff） |
+
+这些需求全部处于 `提案` 状态、无代码引用，因此拆分不产生歧义；若后续有任何文档或提交引用过旧编号，以本表为准。
 
 ## 4. 调研与设计文档绑定
 
@@ -151,9 +167,9 @@
 | [非 Agent 工作台需求调研](./research/2026-11-05-non-agent-workbench-requirement-research.md) | 调研 | T-01 至 T-11、S-01 至 S-06、N-01 至 N-04、A-01 至 A-07、Q-01 至 Q-05 | 已产出，需求待实现 |
 | [今日服务端设计](./superpowers/specs/2026-11-05-craftingtable-today-server-design.md) | 设计 | A-01、A-02、A-03 | 已实现 |
 | [今日服务端实施计划](./superpowers/plans/2026-11-05-craftingtable-today-server.md) | 计划 | A-01、A-02、A-03 | 已交付 |
-| [通用 Agent 调研与当前实现对比](./research/2026-11-06-general-agent-comparison.md) | 调研 | AG-01 至 AG-06 | 调研结论，未进入设计 |
+| [通用 Agent 调研与当前实现对比](./research/2026-11-06-general-agent-comparison.md) | 调研 | AG-01 至 AG-09 | 调研结论，未进入设计 |
 | [Agent 设计](./superpowers/specs/2026-11-05-craftingtable-agent-design.md) | 设计 | AG 系列的现有基线 | 已确认 |
-| [Run 恢复 ADR](./architecture/ADR-001-agent-run-recovery.md) | 决策记录 | AG-04 | 已确认 |
+| [Run 恢复 ADR](./architecture/ADR-001-agent-run-recovery.md) | 决策记录 | AG-05 | 已确认 |
 | [工程化设计规范](./superpowers/specs/2026-11-05-craftingtable-engineering-design.md) | 规范 | Q-01、Q-05 及全部需求的流程约束 | 已确认 |
 
 一份文档覆盖多个需求时，在单元格里用编号区间表示。需求被拆到新文档时，旧文档保留在表里并标注"已部分迁移"，方便追溯来源。
