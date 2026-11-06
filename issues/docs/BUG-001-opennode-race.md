@@ -2,12 +2,13 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 状态 | `待修复` |
+| 状态 | `已修复待验证` |
 | 严重级别 | `P1` |
 | 模块 | `docs` |
 | 发现日期 | 2026-11-06 |
 | 发现方式 | 确定性单测（红） |
 | 影响版本 | `feat/docs-writing` @ `668ef11` |
+| 修复提交 | `e7850a1` |
 | 当前分支 | `feat/docs-writing` |
 
 ## S — 背景
@@ -124,52 +125,70 @@ const openNode = async (id: string) => {
 
 没有任何机制判断「这个响应是否仍属于当前请求」。前一个 `openNode` 的闭包在 await 结束后继续执行，把过期结果写入唯一的状态源。
 
-## 修复建议
+## 修复方式（已实施，`e7850a1`）
 
-沿用搜索已有的做法，加单调递增的 `loadSequence`：
+采用单调递增的 `nodeSequence`，响应回来后比对序号，过期则丢弃：
 
 ```ts
-let loadSequence = 0;
+let nodeSequence = 0;
 
 const openNode = async (id: string) => {
   if (useDocsStore.getState().activeNodeId === id) {
     return;
   }
   await flushSave();
-  loadSequence += 1;
-  const sequence = loadSequence;
-  useDocsStore.getState().setLoading();
+
+  nodeSequence += 1;
+  const sequence = nodeSequence;
+  useDocsStore.getState().setNodeLoading();
+
   try {
     const node = await model.getNode(id);
-    if (sequence !== loadSequence) {
-      return;               // 已被更新的请求取代
+    if (sequence !== nodeSequence) {
+      return;                      // 已被更新的请求取代
     }
     useDocsStore.getState().setActiveNode(node);
   } catch (error) {
-    if (sequence !== loadSequence) {
-      return;
+    if (sequence !== nodeSequence) {
+      return;                      // 旧请求失败不得污染新文档
     }
     ...
   }
 };
 ```
 
-注意 `catch` 分支也要校验：旧请求失败不应把新文档的 `phase` 置为 `error`。
+同时把「当前文档加载状态」从共用的 `phase` 中拆出为 `nodePhase` / `nodeErrorMessage`：
 
-涉及文件：`src/controllers/effects/useDocsEffect.ts`。
+- `nodePhase` 驱动骨架屏与错误态，切换文档时立即变为 `loading`。
+- `phase` 只表示目录树状态，供侧栏使用。
+
+这解决了原实现中「切换文档期间仍渲染上一篇内容」的问题，也为 BUG-003（树加载失败不可恢复）的修复铺路。
+
+涉及文件：
+
+- `src/controllers/effects/useDocsEffect.ts`
+- `src/controllers/stores/docsStore.ts`
+- `src/pages/docs/docPage.tsx`
 
 ## 验证方式
 
 ```bash
 pnpm vitest run tests/e2e/unit/docs/useDocsEffect.test.ts
+pnpm vitest run tests/e2e/unit/docs/docPage.test.tsx
 ```
 
-回归用例应断言：
+回归用例：
 
-1. 慢响应的 `doc-a` 返回后，`activeNode.id` 仍为 `doc-b`。
-2. 旧请求失败时，`phase` 不变成 `error`。
+| 用例 | 断言 |
+| --- | --- |
+| `keeps the later document when an older response arrives last` | 慢响应的 `doc-a` 返回后 `activeNode.id` 仍为 `doc-b` |
+| `ignores a stale failure that arrives after a newer document loaded` | 旧请求失败不改变 `nodePhase` 与 `nodeErrorMessage` |
+| `marks the node phase as loading then ready` | 加载中为 `loading`，完成后为 `ready` |
+| `shows a skeleton instead of the previous document while loading` | 加载期间渲染骨架屏，不渲染上一篇的标题与正文 |
 
-修复后追加到 `tests/e2e/unit/docs/useDocsEffect.test.ts`，不要新增独立文件。
+门禁结果（2026-11-06）：`pnpm typecheck` 通过，`pnpm vitest run` 120 个用例全部通过。
+
+页面验证：把 `/api/v1/docs/item` 延迟 8 秒后点击文档，主区域显示骨架屏（标题栏占位 + 正文占位块），不再显示上一篇内容。
 
 ## 关联
 
