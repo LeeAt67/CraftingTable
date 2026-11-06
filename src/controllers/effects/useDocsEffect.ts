@@ -18,8 +18,23 @@ const CONTENT_SAVE_DELAY = 400;
 const TITLE_SAVE_DELAY = 600;
 const SEARCH_DELAY = 300;
 
+/**
+ * 把底层异常转换成中文提示。
+ * 浏览器在断网或连接被拒时抛出 `TypeError: Failed to fetch`，
+ * 直接展示英文原文会让用户看不懂发生了什么。
+ */
 function messageOf(error: unknown) {
-  return error instanceof Error ? error.message : "操作失败，请重试";
+  if (!(error instanceof Error)) {
+    return "操作失败，请重试";
+  }
+  const raw = error.message.trim();
+  if (
+    !raw ||
+    /failed to fetch|load failed|networkerror|network request failed/i.test(raw)
+  ) {
+    return "网络异常，请检查服务是否可用后重试";
+  }
+  return raw;
 }
 
 export function createDocsEffect(

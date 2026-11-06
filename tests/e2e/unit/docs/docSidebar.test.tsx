@@ -229,4 +229,51 @@ describe("DocSidebar", () => {
       screen.getByText(/文件夹内的内容会一并删除/),
     ).toBeInTheDocument();
   });
+
+  it("shows a Chinese error with retry when the tree fails to load", async () => {
+    vi.mocked(docsModel.listTree).mockRejectedValueOnce(new Error("Failed to fetch"));
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DocSidebar />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("加载文档目录失败")).toBeInTheDocument();
+    expect(
+      screen.getByText("网络异常，请检查服务是否可用后重试"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Failed to fetch")).not.toBeInTheDocument();
+    expect(screen.queryByText("接口设计")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "重试" }));
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("接口设计")).toBeInTheDocument();
+      },
+      { timeout: 1500 },
+    );
+    expect(screen.queryByText("加载文档目录失败")).not.toBeInTheDocument();
+  });
+
+  it("retries the tree automatically after remounting from an error", async () => {
+    vi.mocked(docsModel.listTree).mockClear();
+    useDocsStore.setState({ phase: "error", errorMessage: "网络异常" });
+
+    render(
+      <MemoryRouter>
+        <DocSidebar />
+      </MemoryRouter>,
+    );
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("工作")).toBeInTheDocument();
+      },
+      { timeout: 1500 },
+    );
+    expect(vi.mocked(docsModel.listTree)).toHaveBeenCalledTimes(1);
+  });
 });

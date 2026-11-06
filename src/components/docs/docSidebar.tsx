@@ -23,14 +23,17 @@ export function DocSidebar() {
   const { nodeId } = useParams();
   const effect = useDocsEffect();
   const nodes = useDocsStore((state) => state.nodes);
+  const treePhase = useDocsStore((state) => state.phase);
+  const treeError = useDocsStore((state) => state.errorMessage);
   const searchQuery = useDocsStore((state) => state.searchQuery);
   const searchResults = useDocsStore((state) => state.searchResults);
   const searchPhase = useDocsStore((state) => state.searchPhase);
   const [dialog, setDialog] = useState<DocDialogState>({ type: "none" });
 
   useEffect(() => {
-    // 目录树只拉取一次：store 已有数据时不再覆盖，避免重复请求。
-    if (useDocsStore.getState().phase === "idle") {
+    // 已有数据时不重复请求；加载失败后允许在重新挂载时自动重试。
+    const { phase } = useDocsStore.getState();
+    if (phase === "idle" || phase === "error") {
       void effect.loadTree();
     }
   }, [effect]);
@@ -140,6 +143,34 @@ export function DocSidebar() {
             {searchResults.length === 0 && searchPhase === "loading" && (
               <li className="px-2 py-2 text-xs text-textSecondary">搜索中…</li>
             )}
+          </ul>
+        ) : treePhase === "error" ? (
+          <div
+            role="alert"
+            className="rounded-md border border-border bg-surface px-2 py-2"
+          >
+            <p className="text-xs text-destructive">加载文档目录失败</p>
+            {treeError && (
+              <p className="mt-1 text-[11px] text-textSecondary">{treeError}</p>
+            )}
+            <button
+              type="button"
+              onClick={() => void effect.loadTree()}
+              className="mt-2 w-full rounded border border-border px-2 py-1 text-xs text-textPrimary hover:bg-surfaceSubtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              重试
+            </button>
+          </div>
+        ) : treePhase === "loading" ? (
+          <ul aria-label="目录加载中" className="space-y-1 px-1">
+            {[0, 1, 2].map((index) => (
+              <li
+                key={index}
+                className="h-6 animate-pulse rounded bg-surface"
+                aria-hidden="true"
+              />
+            ))}
+            <li className="sr-only">目录加载中…</li>
           </ul>
         ) : (
           <DocTree
