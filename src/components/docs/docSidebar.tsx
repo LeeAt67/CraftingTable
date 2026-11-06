@@ -130,10 +130,15 @@ export function DocSidebar() {
                 </button>
               </li>
             ))}
-            {searchResults.length === 0 && searchPhase !== "error" && (
-              <li className="px-2 py-2 text-xs text-textSecondary">
-                没有匹配的文档
-              </li>
+            {searchResults.length === 0 &&
+              searchPhase !== "error" &&
+              searchPhase !== "loading" && (
+                <li className="px-2 py-2 text-xs text-textSecondary">
+                  没有匹配的文档
+                </li>
+              )}
+            {searchResults.length === 0 && searchPhase === "loading" && (
+              <li className="px-2 py-2 text-xs text-textSecondary">搜索中…</li>
             )}
           </ul>
         ) : (

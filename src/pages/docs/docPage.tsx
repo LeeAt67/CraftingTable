@@ -1,4 +1,4 @@
-import { Download, Upload } from "lucide-react";
+import { Download, Folder, Upload } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -129,6 +129,36 @@ export default function DocPage() {
 
   if (!activeNode) {
     return null;
+  }
+
+  if (activeNode.kind === "folder") {
+    return (
+      <section className="flex h-full min-w-0 flex-col bg-surface">
+        <header className="flex flex-wrap items-center gap-2 border-b border-border px-6 py-4">
+          <div className="min-w-0 flex-1">
+            <DocTitleInput
+              value={draftTitle}
+              status={saveStatus}
+              onChange={(title) => effect.applyTitleChange(activeNode.id, title)}
+              onRetry={() => void effect.flushSave()}
+            />
+          </div>
+        </header>
+        <div className="grid min-h-0 flex-1 place-items-center px-6">
+          <div className="text-center">
+            <div className="mx-auto grid size-12 place-items-center rounded-xl bg-brandSoft text-brand">
+              <Folder aria-hidden="true" size={20} />
+            </div>
+            <p className="mt-4 text-sm font-medium text-textPrimary">
+              这是一个文件夹
+            </p>
+            <p className="mt-2 text-sm text-textSecondary">
+              在左侧新建文档，或把文档移动到这个文件夹。
+            </p>
+          </div>
+        </div>
+      </section>
+    );
   }
 
   return (
